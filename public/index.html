@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lottery Archive – Letzte Ziehungen</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    header.page-header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header.page-header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #f8fafc;
+    }
+
+    header.page-header p {
+      margin-top: 0.5rem;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+
+    .card header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .flag { font-size: 1.6rem; line-height: 1; }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .draw-date {
+      font-size: 0.82rem;
+      color: #64748b;
+      margin-bottom: 1.1rem;
+    }
+
+    .balls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .ball {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.6rem;
+      height: 2.6rem;
+      border-radius: 50%;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .ball.main {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .ball.bonus-at {
+      background: #dc2626;
+      color: #fff;
+    }
+
+    .ball.bonus-de {
+      background: #dc2626;
+      color: #fff;
+    }
+
+    .ball.bonus-eu {
+      background: #f59e0b;
+      color: #1e293b;
+    }
+
+    .separator {
+      color: #475569;
+      font-weight: 700;
+      font-size: 1.2rem;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: #475569;
+      font-size: 0.8rem;
+    }
+
+    footer a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>Lottery Archive</h1>
+    <p>Letzte offizielle Ziehungsergebnisse</p>
+  </header>
+
+  <main class="grid">
+    
+    <article class="card" id="at">
+      <header>
+        <span class="flag">🇦🇹</span>
+        <h2>AT Lotto 6 aus 45</h2>
+      </header>
+      <p class="draw-date">Ziehung vom 12.04.2026</p>
+      <div class="balls">
+        <span class="ball main">2</span><span class="ball main">3</span><span class="ball main">9</span><span class="ball main">32</span><span class="ball main">39</span><span class="ball main">42</span>
+        <span class='separator'>+</span><span class="ball bonus-at" title="Zusatzzahl">40</span>
+      </div>
+    </article>
+
+    <article class="card" id="de">
+      <header>
+        <span class="flag">🇩🇪</span>
+        <h2>DE Lotto 6 aus 49</h2>
+      </header>
+      <p class="draw-date">Ziehung vom 11.04.2026</p>
+      <div class="balls">
+        <span class="ball main">17</span><span class="ball main">23</span><span class="ball main">32</span><span class="ball main">33</span><span class="ball main">34</span><span class="ball main">46</span>
+        <span class='separator'>+</span><span class="ball bonus-de" title="Superzahl">0</span>
+      </div>
+    </article>
+
+    <article class="card" id="eu">
+      <header>
+        <span class="flag">🇪🇺</span>
+        <h2>EuroMillions</h2>
+      </header>
+      <p class="draw-date">Ziehung vom 14.04.2026</p>
+      <div class="balls">
+        <span class="ball main">1</span><span class="ball main">2</span><span class="ball main">4</span><span class="ball main">28</span><span class="ball main">44</span>
+        <span class='separator'>+</span><span class="ball bonus-eu" title="Lucky Star">5</span><span class="ball bonus-eu" title="Lucky Star">12</span>
+      </div>
+    </article>
+  </main>
+
+  <footer>
+    <p>Aktualisiert: 15.04.2026 18:31 UTC &nbsp;·&nbsp;
+       <a href="https://github.com/cobernosterer/lottery-archive" target="_blank" rel="noopener">GitHub</a>
+    </p>
+  </footer>
+</body>
+</html>
