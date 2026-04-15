@@ -1,7 +1,6 @@
 """Generate a static index.html showing the latest lottery draw results."""
 
 import csv
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -15,8 +14,7 @@ LOTTERIES = [
         "csv": REPO_ROOT / "at" / "lotto_6aus45" / "results.csv",
         "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
         "bonus": [("Zusatzzahl", "zusatzzahl")],
-        "number_range": (1, 45),
-        "bonus_style": "bonus-at",
+        "bonus_style": "bonus-red",
     },
     {
         "id": "de",
@@ -25,8 +23,7 @@ LOTTERIES = [
         "csv": REPO_ROOT / "de" / "lotto_6aus49" / "results.csv",
         "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
         "bonus": [("Superzahl", "superzahl")],
-        "number_range": (1, 49),
-        "bonus_style": "bonus-de",
+        "bonus_style": "bonus-red",
     },
     {
         "id": "eu",
@@ -35,7 +32,6 @@ LOTTERIES = [
         "csv": REPO_ROOT / "eu" / "euromillions" / "results.csv",
         "numbers": ["n1", "n2", "n3", "n4", "n5"],
         "bonus": [("Lucky Star", "s1"), ("Lucky Star", "s2")],
-        "number_range": (1, 50),
         "bonus_style": "bonus-eu",
     },
 ]
@@ -181,12 +177,7 @@ def generate_html(cards: list[str], generated_at: str) -> str:
       color: #fff;
     }}
 
-    .ball.bonus-at {{
-      background: #dc2626;
-      color: #fff;
-    }}
-
-    .ball.bonus-de {{
+    .ball.bonus-red {{
       background: #dc2626;
       color: #fff;
     }}
@@ -227,7 +218,7 @@ def generate_html(cards: list[str], generated_at: str) -> str:
 
   <footer>
     <p>Aktualisiert: {generated_at} &nbsp;·&nbsp;
-       <a href="https://github.com/cobernosterer/lottery-archive" target="_blank" rel="noopener">GitHub</a>
+       <a href="https://github.com/daowa89/lottery-archive" target="_blank" rel="noopener">GitHub</a>
     </p>
   </footer>
 </body>

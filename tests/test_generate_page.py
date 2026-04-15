@@ -17,17 +17,6 @@ import generate_page as gp
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-# ---------------------------------------------------------------------------
 # read_last_row
 # ---------------------------------------------------------------------------
 
@@ -95,8 +84,7 @@ class TestRenderLotteryCard(unittest.TestCase):
         "flag": "🇦🇹",
         "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
         "bonus": [("Zusatzzahl", "zusatzzahl")],
-        "number_range": (1, 45),
-        "bonus_style": "bonus-at",
+        "bonus_style": "bonus-red",
     }
 
     EU = {
@@ -105,7 +93,6 @@ class TestRenderLotteryCard(unittest.TestCase):
         "flag": "🇪🇺",
         "numbers": ["n1", "n2", "n3", "n4", "n5"],
         "bonus": [("Lucky Star", "s1"), ("Lucky Star", "s2")],
-        "number_range": (1, 50),
         "bonus_style": "bonus-eu",
     }
 
@@ -126,14 +113,14 @@ class TestRenderLotteryCard(unittest.TestCase):
         row = {"date": "2025-01-01", "n1": "1", "n2": "2", "n3": "3",
                "n4": "4", "n5": "5", "n6": "6", "zusatzzahl": "9"}
         html = gp.render_lottery_card(self.AT, row)
-        self.assertIn("bonus-at", html)
+        self.assertIn("bonus-red", html)
         self.assertIn(">9<", html)
 
     def test_empty_bonus_omitted(self):
         row = {"date": "2025-01-01", "n1": "1", "n2": "2", "n3": "3",
                "n4": "4", "n5": "5", "n6": "6", "zusatzzahl": ""}
         html = gp.render_lottery_card(self.AT, row)
-        self.assertNotIn("bonus-at", html)
+        self.assertNotIn("bonus-red", html)
         self.assertNotIn("separator", html)
 
     def test_two_lucky_stars_rendered(self):
@@ -196,9 +183,6 @@ class TestMain(unittest.TestCase):
             original_root = gp.REPO_ROOT
             try:
                 gp.REPO_ROOT = Path(original_root)  # keep real CSVs
-                # Redirect public/ output by monkeypatching main's output path
-                original_main = gp.main
-
                 captured = {}
 
                 def patched_main():
