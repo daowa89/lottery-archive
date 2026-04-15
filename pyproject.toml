@@ -1,0 +1,11 @@
+[project]
+name = "lottodata"
+version = "1.0.0"
+description = "Automated lottery draw result collector for Austria (6 aus 45) and Germany (6 aus 49)"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "requests==2.33.1",
+    "beautifulsoup4==4.14.3",
+    "lxml==6.0.4",
+]

@@ -1,0 +1,65 @@
+name: Update EU EuroMillions
+
+on:
+  schedule:
+    # EuroMillions draws on Tuesday (2) and Friday (5) at ~21:00 CET.
+    # Results are typically published around 21:30–22:00 CET (20:30–21:00 UTC).
+    # Running at 22:00 UTC (23:00 CET) ensures results are available before we fetch.
+    - cron: "0 22 * * 2,5"   # Tuesday (2) and Friday (5)
+
+  workflow_dispatch:
+    inputs:
+      init:
+        description: "Full historical import (2004 to present)"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  update-eu:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch and commit EU results
+        run: |
+          if [ "${{ github.event.inputs.init }}" = "true" ]; then
+            python scripts/fetch_euromillions.py --init --commit
+          else
+            python scripts/fetch_euromillions.py --commit
+          fi
+
+      - name: Run integrity check
+        run: |
+          if git log origin/main..HEAD --oneline 2>/dev/null | grep -q .; then
+            python scripts/check_integrity.py --country eu
+          else
+            python scripts/check_integrity.py --country eu --skip-stale
+          fi
+
+      - name: Push new commit (if any)
+        run: |
+          if git log origin/main..HEAD --oneline 2>/dev/null | grep -q .; then
+            git push origin HEAD:main
+          else
+            echo "No new commits to push."
+          fi

@@ -1,0 +1,64 @@
+name: Update DE Lotto 6 aus 49
+
+on:
+  schedule:
+    # Germany draws on Wednesday and Saturday at ~18:25 CET (17:25 UTC summer / 16:25 UTC winter).
+    # Running at 20:00 UTC ensures results are published before we fetch.
+    - cron: "0 20 * * 3,6"   # Wednesday (3) and Saturday (6)
+
+  workflow_dispatch:
+    inputs:
+      init:
+        description: "Full historical import (1955 to present)"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  update-de:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch and commit DE results
+        run: |
+          if [ "${{ github.event.inputs.init }}" = "true" ]; then
+            python scripts/fetch_lotto_de_6aus49.py --init --commit
+          else
+            python scripts/fetch_lotto_de_6aus49.py --commit
+          fi
+
+      - name: Run integrity check
+        run: |
+          if git log origin/main..HEAD --oneline 2>/dev/null | grep -q .; then
+            python scripts/check_integrity.py --country de
+          else
+            python scripts/check_integrity.py --country de --skip-stale
+          fi
+
+      - name: Push new commit (if any)
+        run: |
+          if git log origin/main..HEAD --oneline 2>/dev/null | grep -q .; then
+            git push origin HEAD:main
+          else
+            echo "No new commits to push."
+          fi
