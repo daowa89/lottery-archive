@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).parent.parent
 LOTTERIES = [
     {
         "id": "at",
-        "name": "AT Lotto 6 aus 45",
+        "name": "Lotto 6 aus 45",
         "flag": "🇦🇹",
         "csv": REPO_ROOT / "at" / "lotto_6aus45" / "results.csv",
         "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
@@ -18,7 +18,7 @@ LOTTERIES = [
     },
     {
         "id": "de",
-        "name": "DE Lotto 6 aus 49",
+        "name": "Lotto 6 aus 49",
         "flag": "🇩🇪",
         "csv": REPO_ROOT / "de" / "lotto_6aus49" / "results.csv",
         "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
@@ -27,7 +27,7 @@ LOTTERIES = [
     },
     {
         "id": "eu",
-        "name": "EuroMillions",
+        "name": "Euromillionen",
         "flag": "🇪🇺",
         "csv": REPO_ROOT / "eu" / "euromillions" / "results.csv",
         "numbers": ["n1", "n2", "n3", "n4", "n5"],

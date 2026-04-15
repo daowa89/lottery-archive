@@ -80,7 +80,7 @@ class TestRenderLotteryCard(unittest.TestCase):
 
     AT = {
         "id": "at",
-        "name": "AT Lotto 6 aus 45",
+        "name": "Lotto 6 aus 45",
         "flag": "🇦🇹",
         "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
         "bonus": [("Zusatzzahl", "zusatzzahl")],
@@ -89,7 +89,7 @@ class TestRenderLotteryCard(unittest.TestCase):
 
     EU = {
         "id": "eu",
-        "name": "EuroMillions",
+        "name": "Euromillionen",
         "flag": "🇪🇺",
         "numbers": ["n1", "n2", "n3", "n4", "n5"],
         "bonus": [("Lucky Star", "s1"), ("Lucky Star", "s2")],
@@ -133,7 +133,7 @@ class TestRenderLotteryCard(unittest.TestCase):
         row = {"date": "2025-01-01", "n1": "1", "n2": "2", "n3": "3",
                "n4": "4", "n5": "5", "n6": "6", "zusatzzahl": "7"}
         html = gp.render_lottery_card(self.AT, row)
-        self.assertIn("AT Lotto 6 aus 45", html)
+        self.assertIn("Lotto 6 aus 45", html)
 
     def test_card_id_attribute(self):
         row = {"date": "2025-01-01", "n1": "1", "n2": "2", "n3": "3",
@@ -202,9 +202,9 @@ class TestMain(unittest.TestCase):
                 patched_main()
                 html = captured["html"]
 
-                self.assertIn("AT Lotto 6 aus 45", html)
-                self.assertIn("DE Lotto 6 aus 49", html)
-                self.assertIn("EuroMillions", html)
+                self.assertIn("Lotto 6 aus 45", html)
+                self.assertIn("Lotto 6 aus 49", html)
+                self.assertIn("Euromillionen", html)
                 self.assertIn('class="ball main"', html)
             finally:
                 gp.REPO_ROOT = original_root
