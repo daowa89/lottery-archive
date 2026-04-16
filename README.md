@@ -6,7 +6,7 @@
 [![Update EU](https://github.com/daowa89/lottery-archive/actions/workflows/update_eu.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/update_eu.yml)
 [![Deploy Pages](https://github.com/daowa89/lottery-archive/actions/workflows/deploy_pages.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/deploy_pages.yml)
 
-LottoData is an automated archive of lottery draw results. GitHub Actions fetch new results on every draw day and commit them to this repository as plain CSV files, so the data is always accessible without scraping or signing up for any service.
+LottoData is an automated archive of lottery draw results. GitHub Actions fetch new results on every draw day and commit them to this repository as plain CSV and JSON files, so the data is always accessible without scraping or signing up for any service.
 
 The latest draw results are published as a **[GitHub Page](https://daowa89.github.io/lottery-archive/)**.
 
@@ -18,48 +18,82 @@ Three lotteries are covered:
 
 ## Data
 
-| Game | File | Source |
-|------|------|--------|
-| AT Lotto 6 aus 45 | [`at/lotto_6aus45/results.csv`](at/lotto_6aus45/results.csv) | [win2day.at](https://www.win2day.at/lotterie/lotto/lotto-statistik-zahlen-ergebnisse-download) |
-| DE Lotto 6 aus 49 | [`de/lotto_6aus49/results.csv`](de/lotto_6aus49/results.csv) | [lottozahlenonline.de](https://www.lottozahlenonline.de/statistik/beide-spieltage/lottozahlen-archiv.php) |
-| EU EuroMillions | [`eu/euromillions/results.csv`](eu/euromillions/results.csv) | [win2day.at](https://www.win2day.at/lotterie/euromillionen/euromillionen-statistik-zahlen-ergebnisse-download) |
+Each game is provided as both a CSV and a JSON file:
 
-### CSV Format — AT Lotto 6 aus 45
+| Game | CSV | JSON | Source |
+|------|-----|------|--------|
+| AT Lotto 6 aus 45 | [`at/lotto_6aus45/results.csv`](at/lotto_6aus45/results.csv) | [`at/lotto_6aus45/results.json`](at/lotto_6aus45/results.json) | [win2day.at](https://www.win2day.at/lotterie/lotto/lotto-statistik-zahlen-ergebnisse-download) |
+| DE Lotto 6 aus 49 | [`de/lotto_6aus49/results.csv`](de/lotto_6aus49/results.csv) | [`de/lotto_6aus49/results.json`](de/lotto_6aus49/results.json) | [lottozahlenonline.de](https://www.lottozahlenonline.de/statistik/beide-spieltage/lottozahlen-archiv.php) |
+| EU EuroMillions | [`eu/euromillions/results.csv`](eu/euromillions/results.csv) | [`eu/euromillions/results.json`](eu/euromillions/results.json) | [win2day.at](https://www.win2day.at/lotterie/euromillionen/euromillionen-statistik-zahlen-ergebnisse-download) |
 
+### AT Lotto 6 aus 45
+
+CSV:
 ```
 date,n1,n2,n3,n4,n5,n6,zusatzzahl
 2025-04-09,3,12,18,27,33,41,5
 ```
 
-### CSV Format — DE Lotto 6 aus 49
+JSON:
+```json
+[
+  { "date": "2025-04-09", "numbers": [3, 12, 18, 27, 33, 41], "zusatzzahl": 5 }
+]
+```
 
+### DE Lotto 6 aus 49
+
+CSV:
 ```
 date,n1,n2,n3,n4,n5,n6,superzahl
 2025-04-12,7,14,19,28,35,44,3
 ```
 
-The `superzahl` is a digit from 0–9 drawn separately. Draws before 1992-01-01 have an empty `superzahl` field (the Superzahl was not yet in use).
+JSON:
+```json
+[
+  { "date": "2025-04-12", "numbers": [7, 14, 19, 28, 35, 44], "superzahl": 3 }
+]
+```
 
-### CSV Format — EU EuroMillions
+The `superzahl` is a digit from 0–9 drawn separately. Draws before 1992-01-01 have an empty `superzahl` field in CSV and `null` in JSON (the Superzahl was not yet in use).
 
+### EU EuroMillions
+
+CSV:
 ```
 date,n1,n2,n3,n4,n5,s1,s2
 2025-04-11,7,14,25,38,50,3,9
 ```
 
-`n1`–`n5` are the five main numbers (1–50). `s1` and `s2` are the two Lucky Star numbers (1–12).
+JSON:
+```json
+[
+  { "date": "2025-04-11", "numbers": [7, 14, 25, 38, 50], "stars": [3, 9] }
+]
+```
+
+`numbers` contains the five main numbers (1–50). `stars` contains the two Lucky Star numbers (1–12).
 
 ### Accessing the Data
 
-Fetch the raw CSV directly from GitHub:
+Fetch the raw files directly from GitHub:
 
+**CSV:**
 ```
 https://raw.githubusercontent.com/daowa89/lottery-archive/main/at/lotto_6aus45/results.csv
 https://raw.githubusercontent.com/daowa89/lottery-archive/main/de/lotto_6aus49/results.csv
 https://raw.githubusercontent.com/daowa89/lottery-archive/main/eu/euromillions/results.csv
 ```
 
-Or load directly into a pandas DataFrame:
+**JSON:**
+```
+https://raw.githubusercontent.com/daowa89/lottery-archive/main/at/lotto_6aus45/results.json
+https://raw.githubusercontent.com/daowa89/lottery-archive/main/de/lotto_6aus49/results.json
+https://raw.githubusercontent.com/daowa89/lottery-archive/main/eu/euromillions/results.json
+```
+
+Load the CSV into a pandas DataFrame:
 
 ```python
 import pandas as pd
@@ -72,6 +106,20 @@ eu = pd.read_csv(f"{BASE}/eu/euromillions/results.csv", parse_dates=["date"])
 
 # Most recent draw
 print(at.iloc[-1])
+```
+
+Or fetch the JSON directly:
+
+```python
+import urllib.request, json
+
+BASE = "https://raw.githubusercontent.com/daowa89/lottery-archive/main"
+
+with urllib.request.urlopen(f"{BASE}/at/lotto_6aus45/results.json") as r:
+    draws = json.load(r)
+
+# Most recent draw
+print(draws[-1])
 ```
 
 ## Automation
