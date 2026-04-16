@@ -307,5 +307,48 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(loaded[1].date, "2025-01-07")
 
 
+# ---------------------------------------------------------------------------
+# JSON I/O: write_json
+# ---------------------------------------------------------------------------
+
+class TestJsonIO(unittest.TestCase):
+    def _draw(self, date="2025-01-03", numbers=(3, 19, 29, 35, 37), stars=(1, 9)):
+        return Draw(date, *numbers, *stars)
+
+    def _write_and_load(self, draws):
+        """Write CSV + JSON to a temp dir and return the parsed JSON data."""
+        import tempfile, pathlib, json
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = pathlib.Path(tmp) / "results.csv"
+            json_path = pathlib.Path(tmp) / "results.json"
+            orig_csv, orig_json = fetch_eu.RESULTS_CSV, fetch_eu.RESULTS_JSON
+            fetch_eu.RESULTS_CSV = csv_path
+            fetch_eu.RESULTS_JSON = json_path
+            try:
+                fetch_eu.write_csv(draws)
+                fetch_eu.write_json()
+                with open(json_path) as f:
+                    return json.load(f)
+            finally:
+                fetch_eu.RESULTS_CSV = orig_csv
+                fetch_eu.RESULTS_JSON = orig_json
+
+    def test_write_json_structure(self):
+        data = self._write_and_load([self._draw()])
+        self.assertEqual(len(data), 1)
+        entry = data[0]
+        self.assertEqual(entry["date"], "2025-01-03")
+        self.assertEqual(entry["numbers"], [3, 19, 29, 35, 37])
+        self.assertEqual(entry["stars"], [1, 9])
+
+    def test_write_json_entry_count_matches_csv(self):
+        draws = [
+            self._draw("2025-01-03"),
+            self._draw("2025-01-07", numbers=(12, 17, 27, 44, 50), stars=(4, 11)),
+        ]
+        data = self._write_and_load(draws)
+        self.assertEqual(len(data), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

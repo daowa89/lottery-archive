@@ -194,5 +194,64 @@ class TestParseDateStr(unittest.TestCase):
         self.assertIsNone(fetch_at.parse_date_str("", 2026))
 
 
+# ---------------------------------------------------------------------------
+# JSON I/O: write_json
+# ---------------------------------------------------------------------------
+
+class TestJsonIO(unittest.TestCase):
+    def _draw(self, date="2025-01-04", numbers=(1, 4, 15, 16, 22, 38), zusatzzahl=11):
+        return Draw(date, *numbers, zusatzzahl)
+
+    def _write_and_load(self, draws):
+        """Write CSV + JSON to a temp dir and return the parsed JSON data."""
+        import tempfile, pathlib, json
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = pathlib.Path(tmp) / "results.csv"
+            json_path = pathlib.Path(tmp) / "results.json"
+            orig_csv, orig_json = fetch_at.RESULTS_CSV, fetch_at.RESULTS_JSON
+            fetch_at.RESULTS_CSV = csv_path
+            fetch_at.RESULTS_JSON = json_path
+            try:
+                fetch_at.write_csv(draws)
+                fetch_at.write_json()
+                with open(json_path) as f:
+                    return json.load(f)
+            finally:
+                fetch_at.RESULTS_CSV = orig_csv
+                fetch_at.RESULTS_JSON = orig_json
+
+    def test_write_json_creates_file(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = pathlib.Path(tmp) / "results.csv"
+            json_path = pathlib.Path(tmp) / "results.json"
+            orig_csv, orig_json = fetch_at.RESULTS_CSV, fetch_at.RESULTS_JSON
+            fetch_at.RESULTS_CSV = csv_path
+            fetch_at.RESULTS_JSON = json_path
+            try:
+                fetch_at.write_csv([self._draw()])
+                fetch_at.write_json()
+                self.assertTrue(json_path.exists())
+            finally:
+                fetch_at.RESULTS_CSV = orig_csv
+                fetch_at.RESULTS_JSON = orig_json
+
+    def test_write_json_structure(self):
+        data = self._write_and_load([self._draw()])
+        self.assertEqual(len(data), 1)
+        entry = data[0]
+        self.assertEqual(entry["date"], "2025-01-04")
+        self.assertEqual(entry["numbers"], [1, 4, 15, 16, 22, 38])
+        self.assertEqual(entry["zusatzzahl"], 11)
+
+    def test_write_json_entry_count_matches_csv(self):
+        draws = [
+            self._draw("2025-01-04"),
+            self._draw("2025-01-07", numbers=(2, 5, 10, 20, 30, 40), zusatzzahl=3),
+        ]
+        data = self._write_and_load(draws)
+        self.assertEqual(len(data), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

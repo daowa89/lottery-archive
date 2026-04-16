@@ -295,5 +295,53 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(loaded[1].date, "2025-01-08")
 
 
+# ---------------------------------------------------------------------------
+# JSON I/O: write_json
+# ---------------------------------------------------------------------------
+
+class TestJsonIO(unittest.TestCase):
+    def _draw(self, date="2025-01-04", numbers=(2, 6, 24, 30, 36, 45), superzahl=2):
+        return Draw(date, *numbers, superzahl)
+
+    def _write_and_load(self, draws):
+        """Write CSV + JSON to a temp dir and return the parsed JSON data."""
+        import tempfile, pathlib, json
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = pathlib.Path(tmp) / "results.csv"
+            json_path = pathlib.Path(tmp) / "results.json"
+            orig_csv, orig_json = fetch_de.RESULTS_CSV, fetch_de.RESULTS_JSON
+            fetch_de.RESULTS_CSV = csv_path
+            fetch_de.RESULTS_JSON = json_path
+            try:
+                fetch_de.write_csv(draws)
+                fetch_de.write_json()
+                with open(json_path) as f:
+                    return json.load(f)
+            finally:
+                fetch_de.RESULTS_CSV = orig_csv
+                fetch_de.RESULTS_JSON = orig_json
+
+    def test_write_json_structure(self):
+        data = self._write_and_load([self._draw()])
+        self.assertEqual(len(data), 1)
+        entry = data[0]
+        self.assertEqual(entry["date"], "2025-01-04")
+        self.assertEqual(entry["numbers"], [2, 6, 24, 30, 36, 45])
+        self.assertEqual(entry["superzahl"], 2)
+
+    def test_write_json_none_superzahl_serialized_as_null(self):
+        """Pre-1992 draws with superzahl=None must appear as null in JSON."""
+        data = self._write_and_load([self._draw(date="1970-10-10", superzahl=None)])
+        self.assertIsNone(data[0]["superzahl"])
+
+    def test_write_json_entry_count_matches_csv(self):
+        draws = [
+            self._draw("2025-01-04"),
+            self._draw("2025-01-08", numbers=(9, 27, 28, 30, 45, 49), superzahl=6),
+        ]
+        data = self._write_and_load(draws)
+        self.assertEqual(len(data), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
