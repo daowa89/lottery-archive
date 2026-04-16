@@ -25,7 +25,7 @@ import fetch_euromillions as fetch_eu
 from git_utils import git_commit
 
 
-def update_country(label: str, game: str, csv_file: str, new_draws: list) -> int:
+def update_country(label: str, game: str, csv_file: str, json_file: str, new_draws: list) -> int:
     """Commit new draws for one country. Returns the number of draws committed."""
     if not new_draws:
         print(f"{label}: No new draws.")
@@ -34,7 +34,7 @@ def update_country(label: str, game: str, csv_file: str, new_draws: list) -> int
     dates = ", ".join(d.date for d in new_draws)
     message = f"Add {label} {game} results: {dates}"
 
-    committed = git_commit(csv_file, message)
+    committed = git_commit([csv_file, json_file], message)
     if committed:
         print(f"{label}: Committed {len(new_draws)} new draw(s) — {dates}")
     else:
@@ -51,8 +51,9 @@ def main() -> int:
     try:
         at_new = fetch_at.fetch_new_draws(init=init)
         if at_new:
-            fetch_at.write_draws(at_new)
-        total += update_country("AT", "Lotto 6 aus 45", str(fetch_at.RESULTS_CSV), at_new)
+            fetch_at.write_csv(at_new)
+            fetch_at.write_json()
+        total += update_country("AT", "Lotto 6 aus 45", str(fetch_at.RESULTS_CSV), str(fetch_at.RESULTS_JSON), at_new)
     except Exception as exc:
         print(f"AT fetch failed: {exc}", file=sys.stderr)
 
@@ -60,8 +61,9 @@ def main() -> int:
     try:
         de_new = fetch_de.fetch_new_draws(init=init)
         if de_new:
-            fetch_de.write_draws(de_new)
-        total += update_country("DE", "Lotto 6 aus 49", str(fetch_de.RESULTS_CSV), de_new)
+            fetch_de.write_csv(de_new)
+            fetch_de.write_json()
+        total += update_country("DE", "Lotto 6 aus 49", str(fetch_de.RESULTS_CSV), str(fetch_de.RESULTS_JSON), de_new)
     except Exception as exc:
         print(f"DE fetch failed: {exc}", file=sys.stderr)
 
@@ -69,8 +71,9 @@ def main() -> int:
     try:
         eu_new = fetch_eu.fetch_new_draws(init=init)
         if eu_new:
-            fetch_eu.write_draws(eu_new)
-        total += update_country("EU", "EuroMillions", str(fetch_eu.RESULTS_CSV), eu_new)
+            fetch_eu.write_csv(eu_new)
+            fetch_eu.write_json()
+        total += update_country("EU", "EuroMillions", str(fetch_eu.RESULTS_CSV), str(fetch_eu.RESULTS_JSON), eu_new)
     except Exception as exc:
         print(f"EU fetch failed: {exc}", file=sys.stderr)
 

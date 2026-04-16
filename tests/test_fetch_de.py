@@ -204,7 +204,7 @@ class TestValidateDraw(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# CSV I/O: load_existing_draws / write_draws
+# CSV I/O: load_existing_draws / write_csv
 # ---------------------------------------------------------------------------
 
 class TestCsvIO(unittest.TestCase):
@@ -231,7 +231,7 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_de.RESULTS_CSV
             fetch_de.RESULTS_CSV = real_path
             try:
-                fetch_de.write_draws([draw])
+                fetch_de.write_csv([draw])
                 loaded = fetch_de.load_existing_draws(real_path)
             finally:
                 fetch_de.RESULTS_CSV = original
@@ -241,7 +241,7 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(loaded[0].n1, 2)
         self.assertEqual(loaded[0].superzahl, 2)
 
-    def test_write_draws_none_superzahl_roundtrip(self):
+    def test_write_csv_none_superzahl_roundtrip(self):
         """Pre-1992 draws with superzahl=None survive a write/read cycle."""
         import tempfile, pathlib
         draw = self._draw(date="1970-10-10", superzahl=None)
@@ -250,7 +250,7 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_de.RESULTS_CSV
             fetch_de.RESULTS_CSV = real_path
             try:
-                fetch_de.write_draws([draw])
+                fetch_de.write_csv([draw])
                 loaded = fetch_de.load_existing_draws(real_path)
             finally:
                 fetch_de.RESULTS_CSV = original
@@ -258,7 +258,7 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(len(loaded), 1)
         self.assertIsNone(loaded[0].superzahl)
 
-    def test_write_draws_merges_with_existing(self):
+    def test_write_csv_merges_with_existing(self):
         """Writing new draws must not overwrite draws already in the file."""
         import tempfile, pathlib
         draw1 = self._draw(date="2025-01-04")
@@ -268,15 +268,15 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_de.RESULTS_CSV
             fetch_de.RESULTS_CSV = real_path
             try:
-                fetch_de.write_draws([draw1])
-                fetch_de.write_draws([draw2])
+                fetch_de.write_csv([draw1])
+                fetch_de.write_csv([draw2])
                 loaded = fetch_de.load_existing_draws(real_path)
             finally:
                 fetch_de.RESULTS_CSV = original
 
         self.assertEqual(len(loaded), 2)
 
-    def test_write_draws_sorted_by_date(self):
+    def test_write_csv_sorted_by_date(self):
         """Draws must be written in chronological order regardless of input order."""
         import tempfile, pathlib
         draw_late = self._draw(date="2025-01-08")
@@ -286,7 +286,7 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_de.RESULTS_CSV
             fetch_de.RESULTS_CSV = real_path
             try:
-                fetch_de.write_draws([draw_late, draw_early])
+                fetch_de.write_csv([draw_late, draw_early])
                 loaded = fetch_de.load_existing_draws(real_path)
             finally:
                 fetch_de.RESULTS_CSV = original

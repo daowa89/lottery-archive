@@ -30,14 +30,14 @@ def _make_draw(date: str):
 class TestUpdateCountry(unittest.TestCase):
     def test_returns_zero_when_no_draws(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            result = update_country("AT", "Lotto 6 aus 45", "/f.csv", [])
+            result = update_country("AT", "Lotto 6 aus 45", "/f.csv", "/f.json", [])
         self.assertEqual(result, 0)
 
     def test_returns_draw_count_when_committed(self):
         draws = [_make_draw("2025-01-04"), _make_draw("2025-01-08")]
         with patch("update_all.git_commit", return_value=True), \
              contextlib.redirect_stdout(io.StringIO()):
-            result = update_country("AT", "Lotto 6 aus 45", "/f.csv", draws)
+            result = update_country("AT", "Lotto 6 aus 45", "/f.csv", "/f.json", draws)
         self.assertEqual(result, 2)
 
     def test_returns_draw_count_even_when_file_unchanged(self):
@@ -45,7 +45,7 @@ class TestUpdateCountry(unittest.TestCase):
         draws = [_make_draw("2025-01-04")]
         with patch("update_all.git_commit", return_value=False), \
              contextlib.redirect_stdout(io.StringIO()):
-            result = update_country("AT", "Lotto 6 aus 45", "/f.csv", draws)
+            result = update_country("AT", "Lotto 6 aus 45", "/f.csv", "/f.json", draws)
         self.assertEqual(result, 1)
 
     def test_commit_message_contains_dates(self):
@@ -53,7 +53,7 @@ class TestUpdateCountry(unittest.TestCase):
         with patch("update_all.git_commit") as mock_commit, \
              contextlib.redirect_stdout(io.StringIO()):
             mock_commit.return_value = True
-            update_country("AT", "Lotto 6 aus 45", "/f.csv", draws)
+            update_country("AT", "Lotto 6 aus 45", "/f.csv", "/f.json", draws)
         msg = mock_commit.call_args[0][1]
         self.assertIn("2025-01-04", msg)
         self.assertIn("2025-01-08", msg)
@@ -63,7 +63,7 @@ class TestUpdateCountry(unittest.TestCase):
         with patch("update_all.git_commit") as mock_commit, \
              contextlib.redirect_stdout(io.StringIO()):
             mock_commit.return_value = True
-            update_country("AT", "Lotto 6 aus 45", "/f.csv", draws)
+            update_country("AT", "Lotto 6 aus 45", "/f.csv", "/f.json", draws)
         msg = mock_commit.call_args[0][1]
         self.assertIn("AT", msg)
         self.assertIn("Lotto 6 aus 45", msg)
@@ -90,21 +90,27 @@ class TestMain(unittest.TestCase):
         else:
             at_mock.fetch_new_draws.return_value = at_draws
         at_mock.RESULTS_CSV = Path("/tmp/at.csv")
-        at_mock.write_draws = MagicMock()
+        at_mock.RESULTS_JSON = Path("/tmp/at.json")
+        at_mock.write_csv = MagicMock()
+        at_mock.write_json = MagicMock()
 
         if de_exc:
             de_mock.fetch_new_draws.side_effect = de_exc
         else:
             de_mock.fetch_new_draws.return_value = de_draws
         de_mock.RESULTS_CSV = Path("/tmp/de.csv")
-        de_mock.write_draws = MagicMock()
+        de_mock.RESULTS_JSON = Path("/tmp/de.json")
+        de_mock.write_csv = MagicMock()
+        de_mock.write_json = MagicMock()
 
         if eu_exc:
             eu_mock.fetch_new_draws.side_effect = eu_exc
         else:
             eu_mock.fetch_new_draws.return_value = eu_draws
         eu_mock.RESULTS_CSV = Path("/tmp/eu.csv")
-        eu_mock.write_draws = MagicMock()
+        eu_mock.RESULTS_JSON = Path("/tmp/eu.json")
+        eu_mock.write_csv = MagicMock()
+        eu_mock.write_json = MagicMock()
 
         return at_mock, de_mock, eu_mock
 
@@ -191,9 +197,12 @@ class TestMain(unittest.TestCase):
              patch("update_all.git_commit", return_value=True), \
              contextlib.redirect_stdout(io.StringIO()):
             main()
-        at_mock.write_draws.assert_called_once()
-        de_mock.write_draws.assert_not_called()
-        eu_mock.write_draws.assert_not_called()
+        at_mock.write_csv.assert_called_once()
+        at_mock.write_json.assert_called_once()
+        de_mock.write_csv.assert_not_called()
+        de_mock.write_json.assert_not_called()
+        eu_mock.write_csv.assert_not_called()
+        eu_mock.write_json.assert_not_called()
 
 
 if __name__ == "__main__":

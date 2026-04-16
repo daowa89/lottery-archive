@@ -15,6 +15,7 @@ Usage:
 """
 
 import csv
+import json
 import sys
 import time
 import requests
@@ -26,6 +27,7 @@ from typing import NamedTuple
 from git_utils import git_commit
 
 RESULTS_CSV = Path(__file__).parent.parent / "de" / "lotto_6aus49" / "results.csv"
+RESULTS_JSON = Path(__file__).parent.parent / "de" / "lotto_6aus49" / "results.json"
 BASE_URL = (
     "https://www.lottozahlenonline.de/statistik/beide-spieltage"
     "/lottozahlen-archiv.php"
@@ -195,7 +197,7 @@ def load_existing_draws(csv_path: Path) -> list[Draw]:
     return draws
 
 
-def write_draws(new_draws: list[Draw]) -> None:
+def write_csv(new_draws: list[Draw]) -> None:
     """Merge new draws into results.csv, sort by date, and write the full file."""
     existing = load_existing_draws(RESULTS_CSV)
     merged = {d.date: d for d in existing}
@@ -213,6 +215,23 @@ def write_draws(new_draws: list[Draw]) -> None:
                 draw.date, draw.n1, draw.n2, draw.n3, draw.n4, draw.n5, draw.n6,
                 "" if draw.superzahl is None else draw.superzahl,
             ])
+
+
+def write_json() -> None:
+    """Write results.json from the current state of results.csv."""
+    draws = load_existing_draws(RESULTS_CSV)
+    data = [
+        {
+            "date": d.date,
+            "numbers": [d.n1, d.n2, d.n3, d.n4, d.n5, d.n6],
+            "superzahl": d.superzahl,
+        }
+        for d in draws
+    ]
+    RESULTS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    with open(RESULTS_JSON, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
 
 
 # ---------------------------------------------------------------------------
@@ -273,12 +292,13 @@ def main() -> int:
         for draw in new_draws:
             print(f"    {draw.date}: {draw.n1},{draw.n2},{draw.n3},"
                   f"{draw.n4},{draw.n5},{draw.n6} SZ:{draw.superzahl}")
-        write_draws(new_draws)
+        write_csv(new_draws)
+        write_json()
 
         if commit:
             dates = ", ".join(d.date for d in new_draws)
             message = f"Add DE Lotto 6 aus 49 results: {dates}"
-            if git_commit(str(RESULTS_CSV), message):
+            if git_commit([str(RESULTS_CSV), str(RESULTS_JSON)], message):
                 print(f"  Committed: {message}")
     else:
         print("  No new draws found.")

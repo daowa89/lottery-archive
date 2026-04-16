@@ -19,7 +19,7 @@ class TestGitCommit(unittest.TestCase):
         """git diff --cached --quiet exits 0 (no changes) → False returned."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            self.assertFalse(git_commit("/some/file.csv", "msg"))
+            self.assertFalse(git_commit(["/some/file.csv"], "msg"))
 
     def test_returns_true_when_changes_staged(self):
         """git diff --cached --quiet exits 1 (changes present) → commit created → True."""
@@ -29,12 +29,12 @@ class TestGitCommit(unittest.TestCase):
                 MagicMock(returncode=1),  # git diff --cached --quiet (1 = changes)
                 MagicMock(returncode=0),  # git commit
             ]
-            self.assertTrue(git_commit("/some/file.csv", "msg"))
+            self.assertTrue(git_commit(["/some/file.csv"], "msg"))
 
     def test_git_add_called_with_correct_file(self):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            git_commit("/data/results.csv", "msg")
+            git_commit(["/data/results.csv"], "msg")
             mock_run.assert_any_call(
                 ["git", "add", "/data/results.csv"], check=True
             )
@@ -43,7 +43,7 @@ class TestGitCommit(unittest.TestCase):
         """When diff reports no changes, git commit must never be invoked."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            git_commit("/some/file.csv", "msg")
+            git_commit(["/some/file.csv"], "msg")
             for c in mock_run.call_args_list:
                 self.assertNotIn("commit", c.args[0])
 
@@ -54,7 +54,7 @@ class TestGitCommit(unittest.TestCase):
                 MagicMock(returncode=1),  # git diff
                 MagicMock(returncode=0),  # git commit
             ]
-            git_commit("/some/file.csv", "Add DE results: 2025-01-04")
+            git_commit(["/some/file.csv"], "Add DE results: 2025-01-04")
             mock_run.assert_called_with(
                 ["git", "commit", "-m", "Add DE results: 2025-01-04"],
                 check=True,
@@ -64,9 +64,17 @@ class TestGitCommit(unittest.TestCase):
         """git add must be the very first subprocess call."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            git_commit("/some/file.csv", "msg")
+            git_commit(["/some/file.csv"], "msg")
             first_call = mock_run.call_args_list[0]
             self.assertEqual(first_call, call(["git", "add", "/some/file.csv"], check=True))
+
+    def test_all_files_are_staged(self):
+        """Every file in the list must be staged before the diff check."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            git_commit(["/a.csv", "/a.json"], "msg")
+            mock_run.assert_any_call(["git", "add", "/a.csv"], check=True)
+            mock_run.assert_any_call(["git", "add", "/a.json"], check=True)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ Usage:
 """
 
 import csv
+import json
 import re
 import sys
 import time
@@ -27,6 +28,7 @@ from typing import NamedTuple
 from git_utils import git_commit
 
 RESULTS_CSV = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.csv"
+RESULTS_JSON = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.json"
 YEARLY_BASE_URL = "https://statics.win2day.at/media/NN_W2D_STAT_Lotto_{year}.csv"
 HISTORICAL_URLS = [
     "https://statics.win2day.at/media-nopagespeed/lotto-ergebnisse-1986-2010.csv",
@@ -313,7 +315,7 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
     return new_draws
 
 
-def write_draws(new_draws: list[Draw]) -> None:
+def write_csv(new_draws: list[Draw]) -> None:
     """Merge new draws into results.csv, sort by date, and write the full file."""
     existing = load_existing_draws(RESULTS_CSV)
     merged = {d.date: d for d in existing}
@@ -328,6 +330,23 @@ def write_draws(new_draws: list[Draw]) -> None:
         writer.writerow(["date", "n1", "n2", "n3", "n4", "n5", "n6", "zusatzzahl"])
         for draw in sorted_draws:
             writer.writerow(draw)
+
+
+def write_json() -> None:
+    """Write results.json from the current state of results.csv."""
+    draws = load_existing_draws(RESULTS_CSV)
+    data = [
+        {
+            "date": d.date,
+            "numbers": [d.n1, d.n2, d.n3, d.n4, d.n5, d.n6],
+            "zusatzzahl": d.zusatzzahl,
+        }
+        for d in draws
+    ]
+    RESULTS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    with open(RESULTS_JSON, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
 
 
 # ---------------------------------------------------------------------------
@@ -347,12 +366,13 @@ def main() -> int:
         for draw in new_draws:
             print(f"    {draw.date}: {draw.n1},{draw.n2},{draw.n3},"
                   f"{draw.n4},{draw.n5},{draw.n6} ZZ:{draw.zusatzzahl}")
-        write_draws(new_draws)
+        write_csv(new_draws)
+        write_json()
 
         if commit:
             dates = ", ".join(d.date for d in new_draws)
             message = f"Add AT Lotto 6 aus 45 results: {dates}"
-            if git_commit(str(RESULTS_CSV), message):
+            if git_commit([str(RESULTS_CSV), str(RESULTS_JSON)], message):
                 print(f"  Committed: {message}")
     else:
         print("  No new draws found.")

@@ -261,7 +261,7 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_eu.RESULTS_CSV
             fetch_eu.RESULTS_CSV = real_path
             try:
-                fetch_eu.write_draws([draw])
+                fetch_eu.write_csv([draw])
                 loaded = fetch_eu.load_existing_draws(real_path)
             finally:
                 fetch_eu.RESULTS_CSV = original
@@ -272,7 +272,7 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(loaded[0].s1, 1)
         self.assertEqual(loaded[0].s2, 9)
 
-    def test_write_draws_merges_with_existing(self):
+    def test_write_csv_merges_with_existing(self):
         import tempfile, pathlib
         draw1 = self._draw(date="2025-01-03")
         draw2 = self._draw(date="2025-01-07", numbers=(12, 17, 27, 44, 50), stars=(4, 11))
@@ -281,15 +281,15 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_eu.RESULTS_CSV
             fetch_eu.RESULTS_CSV = real_path
             try:
-                fetch_eu.write_draws([draw1])
-                fetch_eu.write_draws([draw2])
+                fetch_eu.write_csv([draw1])
+                fetch_eu.write_csv([draw2])
                 loaded = fetch_eu.load_existing_draws(real_path)
             finally:
                 fetch_eu.RESULTS_CSV = original
 
         self.assertEqual(len(loaded), 2)
 
-    def test_write_draws_sorted_by_date(self):
+    def test_write_csv_sorted_by_date(self):
         import tempfile, pathlib
         draw_late = self._draw(date="2025-01-07")
         draw_early = self._draw(date="2025-01-03", numbers=(1, 2, 3, 4, 5))
@@ -298,7 +298,7 @@ class TestCsvIO(unittest.TestCase):
             original = fetch_eu.RESULTS_CSV
             fetch_eu.RESULTS_CSV = real_path
             try:
-                fetch_eu.write_draws([draw_late, draw_early])
+                fetch_eu.write_csv([draw_late, draw_early])
                 loaded = fetch_eu.load_existing_draws(real_path)
             finally:
                 fetch_eu.RESULTS_CSV = original
