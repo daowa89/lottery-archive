@@ -185,7 +185,20 @@ class TestMain(unittest.TestCase):
             result = main()
         self.assertEqual(result, 2)
 
-    def test_write_draws_called_only_when_new_draws(self):
+    def test_init_flag_passed_to_fetch_new_draws(self):
+        at_mock, de_mock, eu_mock = self._patch_fetchers()
+        with patch("update_all.fetch_at", at_mock), \
+             patch("update_all.fetch_de", de_mock), \
+             patch("update_all.fetch_eu", eu_mock), \
+             patch("update_all.git_commit", return_value=False), \
+             patch("sys.argv", ["update_all.py", "--init"]), \
+             contextlib.redirect_stdout(io.StringIO()):
+            main()
+        at_mock.fetch_new_draws.assert_called_once_with(init=True)
+        de_mock.fetch_new_draws.assert_called_once_with(init=True)
+        eu_mock.fetch_new_draws.assert_called_once_with(init=True)
+
+    def test_write_csv_and_json_called_only_when_new_draws(self):
         at_mock, de_mock, eu_mock = self._patch_fetchers(
             at_draws=[_make_draw("2025-01-04")],
             de_draws=[],

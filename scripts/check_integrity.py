@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Check data integrity of all lottery result CSV files.
+Check data integrity of all lottery result files.
 
-Verifies for each CSV:
+For each game the following CSV checks are run:
   - No duplicate dates
   - All numbers within the valid range for the game
   - Rows sorted chronologically
   - Data is not stale (last draw is not older than max_stale_days)
+
+If the CSV passes, the corresponding JSON file is also verified:
+  - File exists
+  - File contains valid JSON
+  - Entry count matches the CSV row count
+  - Every CSV date has a matching JSON entry with identical numbers and bonus fields
+  - No extra dates exist in JSON that are absent from CSV
 
 Usage:
   python check_integrity.py              # check all countries
@@ -19,6 +26,7 @@ Exit code 1: one or more checks failed
 """
 
 import csv
+import json
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -28,46 +36,133 @@ AT_CSV = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.csv"
 DE_CSV = Path(__file__).parent.parent / "de" / "lotto_6aus49" / "results.csv"
 EU_CSV = Path(__file__).parent.parent / "eu" / "euromillions" / "results.csv"
 
+AT_JSON = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.json"
+DE_JSON = Path(__file__).parent.parent / "de" / "lotto_6aus49" / "results.json"
+EU_JSON = Path(__file__).parent.parent / "eu" / "euromillions" / "results.json"
+
 
 @dataclass
 class GameRules:
     label: str
     csv_path: Path
+    json_path: Path
     number_min: int
     number_max: int
     num_count: int              # count of main numbers (6 for Lotto, 5 for EuroMillions)
-    extra_fields: list[str]     # column names for bonus numbers
+    extra_fields: list[str]     # column names for bonus numbers in the CSV
     extra_min: int
     extra_max: int
+    json_extra_key: str         # JSON key for bonus numbers ("zusatzzahl", "superzahl", "stars")
     max_stale_days: int = 7     # alert if last draw is older than this many days
 
 
 GAMES = [
     GameRules(
         label="AT Lotto 6 aus 45",
-        csv_path=AT_CSV,
+        csv_path=AT_CSV, json_path=AT_JSON,
         number_min=1, number_max=45,
         num_count=6,
         extra_fields=["zusatzzahl"], extra_min=1, extra_max=45,
+        json_extra_key="zusatzzahl",
         max_stale_days=7,   # draws Wed + Sun, max gap 4 days
     ),
     GameRules(
         label="DE Lotto 6 aus 49",
-        csv_path=DE_CSV,
+        csv_path=DE_CSV, json_path=DE_JSON,
         number_min=1, number_max=49,
         num_count=6,
         extra_fields=["superzahl"], extra_min=0, extra_max=9,
+        json_extra_key="superzahl",
         max_stale_days=7,   # draws Wed + Sat, max gap 4 days
     ),
     GameRules(
         label="EU EuroMillions",
-        csv_path=EU_CSV,
+        csv_path=EU_CSV, json_path=EU_JSON,
         number_min=1, number_max=50,
         num_count=5,
         extra_fields=["s1", "s2"], extra_min=1, extra_max=12,
+        json_extra_key="stars",
         max_stale_days=7,   # draws Tue + Fri, max gap 4 days
     ),
 ]
+
+
+def check_json(rules: GameRules, csv_rows: list[dict]) -> list[str]:
+    """
+    Verify the JSON file and compare its content against the CSV rows.
+
+    Checks:
+      - File exists
+      - File is valid JSON
+      - Entry count matches the CSV row count
+      - Every CSV date has a matching JSON entry
+      - Main numbers match for each date
+      - Bonus fields match for each date
+      - No extra dates in JSON that are absent from CSV
+
+    Returns a list of error strings (empty list means all checks passed).
+    """
+    if not rules.json_path.exists():
+        return [f"File not found: {rules.json_path}"]
+
+    try:
+        with open(rules.json_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        return [f"JSON file is not valid JSON: {exc}"]
+
+    errors: list[str] = []
+
+    if len(data) != len(csv_rows):
+        errors.append(
+            f"JSON entry count ({len(data)}) does not match "
+            f"CSV row count ({len(csv_rows)})"
+        )
+
+    json_by_date: dict[str, dict] = {entry.get("date", ""): entry for entry in data}
+    csv_dates: set[str] = set()
+
+    for row in csv_rows:
+        d = row.get("date", "").strip()
+        csv_dates.add(d)
+
+        if d not in json_by_date:
+            errors.append(f"{d}: entry missing in JSON")
+            continue
+
+        entry = json_by_date[d]
+
+        # Compare main numbers
+        try:
+            csv_numbers = [int(row[f"n{j}"]) for j in range(1, rules.num_count + 1)]
+        except (KeyError, ValueError):
+            continue  # already caught by check_csv
+        json_numbers = entry.get("numbers", [])
+        if csv_numbers != json_numbers:
+            errors.append(
+                f"{d}: numbers differ — CSV {csv_numbers} vs JSON {json_numbers}"
+            )
+
+        # Compare bonus fields
+        csv_extras: list[int | None] = []
+        for field in rules.extra_fields:
+            val_str = str(row.get(field, "")).strip()
+            csv_extras.append(int(val_str) if val_str else None)
+        json_extras_raw = entry.get(rules.json_extra_key)
+        json_extras = json_extras_raw if isinstance(json_extras_raw, list) else [json_extras_raw]
+        if csv_extras != json_extras:
+            errors.append(
+                f"{d}: {rules.json_extra_key} differs — "
+                f"CSV {csv_extras} vs JSON {json_extras}"
+            )
+
+    for entry in data:
+        if entry.get("date", "") not in csv_dates:
+            errors.append(
+                f"{entry.get('date', '?')}: entry in JSON but not in CSV"
+            )
+
+    return errors
 
 
 def check_csv(rules: GameRules,
@@ -234,8 +329,15 @@ def main() -> int:
                 print(f"    - {err}")
         else:
             with open(rules.csv_path, newline="", encoding="utf-8") as f:
-                count = sum(1 for _ in csv.DictReader(f))
-            print(f"  OK — {count} draw(s), all checks passed.")
+                csv_rows = list(csv.DictReader(f))
+            json_errors = check_json(rules, csv_rows)
+            if json_errors:
+                all_passed = False
+                print(f"  CSV OK — {len(csv_rows)} draw(s), but JSON check failed:")
+                for err in json_errors:
+                    print(f"    - {err}")
+            else:
+                print(f"  OK — {len(csv_rows)} draw(s), all checks passed.")
 
     return 0 if all_passed else 1
 

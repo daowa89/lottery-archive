@@ -25,12 +25,13 @@ import json
 import re
 import sys
 import time
-import requests
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
+from draw_utils import merge_draws
 from git_utils import git_commit
+from http_utils import fetch_url, BROWSER_HEADERS
 
 RESULTS_CSV = Path(__file__).parent.parent / "eu" / "euromillions" / "results.csv"
 RESULTS_JSON = Path(__file__).parent.parent / "eu" / "euromillions" / "results.json"
@@ -46,13 +47,6 @@ FIRST_YEAR = 2004
 
 NUMBER_MIN, NUMBER_MAX = 1, 50
 STAR_MIN, STAR_MAX = 1, 12
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-}
 
 
 class Draw(NamedTuple):
@@ -90,31 +84,6 @@ def validate_draw(draw: Draw) -> tuple[bool, str]:
         out = [s for s in stars if not STAR_MIN <= s <= STAR_MAX]
         return False, f"star numbers out of range {STAR_MIN}-{STAR_MAX}: {out}"
     return True, ""
-
-
-# ---------------------------------------------------------------------------
-# Network
-# ---------------------------------------------------------------------------
-
-def fetch_url(url: str, retries: int = 3, backoff: float = 2.0) -> str:
-    """Fetch a URL with retry logic and exponential backoff."""
-    last_exc: Exception | None = None
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    for attempt in range(1, retries + 1):
-        try:
-            resp = session.get(url, timeout=30)
-            resp.raise_for_status()
-            return resp.text
-        except requests.RequestException as exc:
-            last_exc = exc
-            if attempt < retries:
-                wait = backoff ** attempt
-                print(f"  Attempt {attempt} failed ({exc}). Retrying in {wait:.0f}s...")
-                time.sleep(wait)
-
-    raise last_exc  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -318,12 +287,7 @@ def load_existing_draws(csv_path: Path) -> list[Draw]:
 
 def write_csv(new_draws: list[Draw]) -> None:
     """Merge new draws into results.csv, sort by date, and write the full file."""
-    existing = load_existing_draws(RESULTS_CSV)
-    merged = {d.date: d for d in existing}
-    for draw in new_draws:
-        merged[draw.date] = draw
-
-    sorted_draws = sorted(merged.values(), key=lambda d: d.date)
+    sorted_draws = merge_draws(new_draws, load_existing_draws(RESULTS_CSV))
     RESULTS_CSV.parent.mkdir(parents=True, exist_ok=True)
 
     with open(RESULTS_CSV, "w", newline="", encoding="utf-8") as f:
@@ -337,16 +301,35 @@ def write_csv(new_draws: list[Draw]) -> None:
             ])
 
 
-def write_json() -> None:
-    """Write results.json from the current state of results.csv."""
-    draws = load_existing_draws(RESULTS_CSV)
+def load_existing_draws_json(json_path: Path) -> list[Draw]:
+    """Return all draws currently stored in the results JSON."""
+    if not json_path.exists():
+        return []
+    with open(json_path, encoding="utf-8") as f:
+        data = json.load(f)
+    draws: list[Draw] = []
+    for entry in data:
+        try:
+            draws.append(Draw(
+                entry["date"],
+                *entry["numbers"],
+                *entry["stars"],
+            ))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return draws
+
+
+def write_json(new_draws: list[Draw]) -> None:
+    """Merge new draws and write results.json. Independent of results.csv."""
+    sorted_draws = merge_draws(new_draws, load_existing_draws_json(RESULTS_JSON))
     data = [
         {
             "date": d.date,
             "numbers": [d.n1, d.n2, d.n3, d.n4, d.n5],
             "stars": [d.s1, d.s2],
         }
-        for d in draws
+        for d in sorted_draws
     ]
     RESULTS_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(RESULTS_JSON, "w", encoding="utf-8") as f:
@@ -371,7 +354,7 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
 
     if init:
         print("  Fetching historical data (2004–2016)...")
-        content = fetch_url(HISTORICAL_URL)
+        content = fetch_url(HISTORICAL_URL, headers=BROWSER_HEADERS)
         hist_draws = parse_historical_file(content)
         new = [d for d in hist_draws if d.date not in existing_dates]
         all_new.extend(new)
@@ -387,7 +370,7 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
     for year in years:
         print(f"  Fetching year {year}...")
         url = YEARLY_URL.format(year=year)
-        content = fetch_url(url)
+        content = fetch_url(url, headers=BROWSER_HEADERS)
         year_draws = parse_yearly_file(content)
         new = [d for d in year_draws if d.date not in existing_dates]
         all_new.extend(new)
@@ -423,7 +406,7 @@ def main() -> int:
                 f"{draw.n4},{draw.n5} S:{draw.s1},{draw.s2}"
             )
         write_csv(new_draws)
-        write_json()
+        write_json(new_draws)
 
         if commit:
             dates = ", ".join(d.date for d in new_draws)

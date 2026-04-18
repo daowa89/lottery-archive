@@ -18,14 +18,14 @@ import csv
 import json
 import re
 import sys
-import time
-import requests
 from datetime import date, datetime
 from io import StringIO
 from pathlib import Path
 from typing import NamedTuple
 
+from draw_utils import merge_draws
 from git_utils import git_commit
+from http_utils import fetch_url, HTTPError, RequestException
 
 RESULTS_CSV = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.csv"
 RESULTS_JSON = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.json"
@@ -78,31 +78,6 @@ def validate_draw(draw: Draw) -> tuple[bool, str]:
             f"{ZUSATZZAHL_MIN}-{ZUSATZZAHL_MAX}"
         )
     return True, ""
-
-
-# ---------------------------------------------------------------------------
-# Network
-# ---------------------------------------------------------------------------
-
-def fetch_url(url: str, retries: int = 3, backoff: float = 2.0) -> str:
-    """
-    Download a URL and return the text content.
-    Retries up to `retries` times with exponential backoff on transient errors.
-    """
-    last_exc: Exception | None = None
-    for attempt in range(1, retries + 1):
-        try:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            resp.encoding = resp.apparent_encoding or "windows-1252"
-            return resp.text
-        except requests.RequestException as exc:
-            last_exc = exc
-            if attempt < retries:
-                wait = backoff ** attempt
-                print(f"  Attempt {attempt} failed ({exc}). Retrying in {wait:.0f}s...")
-                time.sleep(wait)
-    raise last_exc  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +257,9 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
         for url in HISTORICAL_URLS:
             print(f"  Fetching historical file: {url}")
             try:
-                content = fetch_url(url)
+                content = fetch_url(url, encoding="auto")
                 all_draws.extend(parse_historical_file(content))
-            except requests.RequestException as e:
+            except RequestException as e:
                 print(f"  WARNING: Could not fetch {url}: {e}", file=sys.stderr)
         years = range(YEARLY_START, current_year + 1)
     else:
@@ -294,14 +269,14 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
         url = YEARLY_BASE_URL.format(year=year)
         print(f"  Fetching yearly file: {url}")
         try:
-            content = fetch_url(url)
+            content = fetch_url(url, encoding="auto")
             all_draws.extend(parse_yearly_file(content, year))
-        except requests.HTTPError as e:
+        except HTTPError as e:
             if e.response.status_code == 404:
                 print(f"  Skipping {year}: file not yet available.")
             else:
                 print(f"  WARNING: HTTP error for {year}: {e}", file=sys.stderr)
-        except requests.RequestException as e:
+        except RequestException as e:
             print(f"  WARNING: Could not fetch {year}: {e}", file=sys.stderr)
 
     seen: set[str] = set()
@@ -317,12 +292,7 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
 
 def write_csv(new_draws: list[Draw]) -> None:
     """Merge new draws into results.csv, sort by date, and write the full file."""
-    existing = load_existing_draws(RESULTS_CSV)
-    merged = {d.date: d for d in existing}
-    for draw in new_draws:
-        merged[draw.date] = draw
-
-    sorted_draws = sorted(merged.values(), key=lambda d: d.date)
+    sorted_draws = merge_draws(new_draws, load_existing_draws(RESULTS_CSV))
     RESULTS_CSV.parent.mkdir(parents=True, exist_ok=True)
 
     with open(RESULTS_CSV, "w", newline="", encoding="utf-8") as f:
@@ -332,16 +302,35 @@ def write_csv(new_draws: list[Draw]) -> None:
             writer.writerow(draw)
 
 
-def write_json() -> None:
-    """Write results.json from the current state of results.csv."""
-    draws = load_existing_draws(RESULTS_CSV)
+def load_existing_draws_json(json_path: Path) -> list[Draw]:
+    """Return all draws currently stored in the results JSON."""
+    if not json_path.exists():
+        return []
+    with open(json_path, encoding="utf-8") as f:
+        data = json.load(f)
+    draws: list[Draw] = []
+    for entry in data:
+        try:
+            draws.append(Draw(
+                entry["date"],
+                *entry["numbers"],
+                entry["zusatzzahl"],
+            ))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return draws
+
+
+def write_json(new_draws: list[Draw]) -> None:
+    """Merge new draws and write results.json. Independent of results.csv."""
+    sorted_draws = merge_draws(new_draws, load_existing_draws_json(RESULTS_JSON))
     data = [
         {
             "date": d.date,
             "numbers": [d.n1, d.n2, d.n3, d.n4, d.n5, d.n6],
             "zusatzzahl": d.zusatzzahl,
         }
-        for d in draws
+        for d in sorted_draws
     ]
     RESULTS_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(RESULTS_JSON, "w", encoding="utf-8") as f:
@@ -367,7 +356,7 @@ def main() -> int:
             print(f"    {draw.date}: {draw.n1},{draw.n2},{draw.n3},"
                   f"{draw.n4},{draw.n5},{draw.n6} ZZ:{draw.zusatzzahl}")
         write_csv(new_draws)
-        write_json()
+        write_json(new_draws)
 
         if commit:
             dates = ", ".join(d.date for d in new_draws)

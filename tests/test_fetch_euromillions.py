@@ -311,43 +311,91 @@ class TestCsvIO(unittest.TestCase):
 # JSON I/O: write_json
 # ---------------------------------------------------------------------------
 
+from helpers import write_and_load_json
+
+
+class TestLoadExistingDrawsJson(unittest.TestCase):
+    def _draw(self, date="2025-01-03", numbers=(3, 19, 29, 35, 37), stars=(1, 9)):
+        return Draw(date, *numbers, *stars)
+
+    def test_missing_file_returns_empty(self):
+        result = fetch_eu.load_existing_draws_json(Path("/nonexistent/results.json"))
+        self.assertEqual(result, [])
+
+    def test_roundtrip(self):
+        import tempfile, pathlib
+        draw = self._draw()
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            original = fetch_eu.RESULTS_JSON
+            fetch_eu.RESULTS_JSON = json_path
+            try:
+                fetch_eu.write_json([draw])
+            finally:
+                fetch_eu.RESULTS_JSON = original
+            loaded = fetch_eu.load_existing_draws_json(json_path)
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0].date, "2025-01-03")
+        self.assertEqual(loaded[0].n1, 3)
+        self.assertEqual(loaded[0].s1, 1)
+        self.assertEqual(loaded[0].s2, 9)
+
+    def test_malformed_entry_skipped(self):
+        import tempfile, pathlib, json
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            data = [
+                {"date": "2025-01-03", "numbers": [3, 19, 29, 35, 37], "stars": [1, 9]},
+                {"date": "bad-entry"},
+                {"date": "2025-01-07", "numbers": [12, 17, 27, 44, 50], "stars": [4, 11]},
+            ]
+            json_path.write_text(json.dumps(data), encoding="utf-8")
+            loaded = fetch_eu.load_existing_draws_json(json_path)
+        self.assertEqual(len(loaded), 2)
+        self.assertEqual(loaded[0].date, "2025-01-03")
+        self.assertEqual(loaded[1].date, "2025-01-07")
+
+
 class TestJsonIO(unittest.TestCase):
     def _draw(self, date="2025-01-03", numbers=(3, 19, 29, 35, 37), stars=(1, 9)):
         return Draw(date, *numbers, *stars)
 
-    def _write_and_load(self, draws):
-        """Write CSV + JSON to a temp dir and return the parsed JSON data."""
-        import tempfile, pathlib, json
-        with tempfile.TemporaryDirectory() as tmp:
-            csv_path = pathlib.Path(tmp) / "results.csv"
-            json_path = pathlib.Path(tmp) / "results.json"
-            orig_csv, orig_json = fetch_eu.RESULTS_CSV, fetch_eu.RESULTS_JSON
-            fetch_eu.RESULTS_CSV = csv_path
-            fetch_eu.RESULTS_JSON = json_path
-            try:
-                fetch_eu.write_csv(draws)
-                fetch_eu.write_json()
-                with open(json_path) as f:
-                    return json.load(f)
-            finally:
-                fetch_eu.RESULTS_CSV = orig_csv
-                fetch_eu.RESULTS_JSON = orig_json
-
     def test_write_json_structure(self):
-        data = self._write_and_load([self._draw()])
+        data = write_and_load_json(fetch_eu, [self._draw()])
         self.assertEqual(len(data), 1)
         entry = data[0]
         self.assertEqual(entry["date"], "2025-01-03")
         self.assertEqual(entry["numbers"], [3, 19, 29, 35, 37])
         self.assertEqual(entry["stars"], [1, 9])
 
-    def test_write_json_entry_count_matches_csv(self):
+    def test_write_json_entry_count_matches_draws(self):
         draws = [
             self._draw("2025-01-03"),
             self._draw("2025-01-07", numbers=(12, 17, 27, 44, 50), stars=(4, 11)),
         ]
-        data = self._write_and_load(draws)
+        data = write_and_load_json(fetch_eu, draws)
         self.assertEqual(len(data), 2)
+
+    def test_write_json_merges_with_existing(self):
+        """Second call must merge with, not overwrite, the existing JSON."""
+        import tempfile, pathlib
+        draw1 = self._draw("2025-01-03")
+        draw2 = self._draw("2025-01-07", numbers=(12, 17, 27, 44, 50), stars=(4, 11))
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            original = fetch_eu.RESULTS_JSON
+            fetch_eu.RESULTS_JSON = json_path
+            try:
+                fetch_eu.write_json([draw1])
+                fetch_eu.write_json([draw2])
+                import json
+                with open(json_path, encoding="utf-8") as f:
+                    data = json.load(f)
+            finally:
+                fetch_eu.RESULTS_JSON = original
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["date"], "2025-01-03")
+        self.assertEqual(data[1]["date"], "2025-01-07")
 
 
 if __name__ == "__main__":

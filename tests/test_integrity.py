@@ -13,34 +13,41 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from check_integrity import check_csv, GameRules
+import json
+
+from check_integrity import check_csv, check_json, GameRules
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_rules(path: Path, country: str) -> GameRules:
+def make_rules(path: Path, country: str, json_path: Path = None) -> GameRules:
+    if json_path is None:
+        json_path = path.with_suffix(".json")
     if country == "at":
         return GameRules(
-            label="AT Lotto 6 aus 45", csv_path=path,
+            label="AT Lotto 6 aus 45", csv_path=path, json_path=json_path,
             number_min=1, number_max=45,
             num_count=6,
             extra_fields=["zusatzzahl"], extra_min=1, extra_max=45,
+            json_extra_key="zusatzzahl",
         )
     if country == "de":
         return GameRules(
-            label="DE Lotto 6 aus 49", csv_path=path,
+            label="DE Lotto 6 aus 49", csv_path=path, json_path=json_path,
             number_min=1, number_max=49,
             num_count=6,
             extra_fields=["superzahl"], extra_min=0, extra_max=9,
+            json_extra_key="superzahl",
         )
     # eu
     return GameRules(
-        label="EU EuroMillions", csv_path=path,
+        label="EU EuroMillions", csv_path=path, json_path=json_path,
         number_min=1, number_max=50,
         num_count=5,
         extra_fields=["s1", "s2"], extra_min=1, extra_max=12,
+        json_extra_key="stars",
     )
 
 
@@ -277,6 +284,113 @@ class TestStaleData(unittest.TestCase):
             rules = make_rules(p, "at")
             errors = check_csv(rules, skip_stale=True)
             self.assertTrue(any("duplicate" in e for e in errors))
+
+
+# ---------------------------------------------------------------------------
+# JSON integrity: check_json
+# ---------------------------------------------------------------------------
+
+AT_JSON_ENTRY  = {"date": "2025-01-04", "numbers": [1, 4, 15, 16, 22, 38], "zusatzzahl": 11}
+AT_JSON_ENTRY2 = {"date": "2025-01-08", "numbers": [3, 9, 18, 27, 33, 41], "zusatzzahl": 5}
+
+
+class TestJsonIntegrity(unittest.TestCase):
+    def _rules(self, csv_path: Path, json_path: Path) -> GameRules:
+        return make_rules(csv_path, "at", json_path=json_path)
+
+    def test_missing_json_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"   # not created
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertTrue(any("not found" in e for e in errors))
+
+    def test_invalid_json_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            json_p.write_text("not valid json", encoding="utf-8")
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertTrue(any("valid JSON" in e for e in errors))
+
+    def test_count_mismatch_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            json_p.write_text(json.dumps([]), encoding="utf-8")  # 0 entries vs 1
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertTrue(any("count" in e for e in errors))
+
+    def test_valid_json_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            json_p.write_text(json.dumps([AT_JSON_ENTRY]), encoding="utf-8")
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertEqual(errors, [])
+
+    def test_number_mismatch_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            wrong = {**AT_JSON_ENTRY, "numbers": [1, 2, 3, 4, 5, 6]}
+            json_p.write_text(json.dumps([wrong]), encoding="utf-8")
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertTrue(any("numbers differ" in e for e in errors))
+
+    def test_bonus_mismatch_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            wrong = {**AT_JSON_ENTRY, "zusatzzahl": 99}
+            json_p.write_text(json.dumps([wrong]), encoding="utf-8")
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertTrue(any("zusatzzahl" in e for e in errors))
+
+    def test_date_missing_in_json_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW, VALID_AT_ROW2])
+            json_p.write_text(json.dumps([AT_JSON_ENTRY]), encoding="utf-8")
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW, VALID_AT_ROW2])
+            self.assertTrue(any("missing in JSON" in e for e in errors))
+
+    def test_date_extra_in_json_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "at.csv"
+            json_p = Path(tmp) / "at.json"
+            write_csv(csv_p, AT_FIELDS, [VALID_AT_ROW])
+            json_p.write_text(json.dumps([AT_JSON_ENTRY, AT_JSON_ENTRY2]), encoding="utf-8")
+            errors = check_json(self._rules(csv_p, json_p), csv_rows=[VALID_AT_ROW])
+            self.assertTrue(any("not in CSV" in e for e in errors))
+
+    def test_eu_stars_compared_correctly(self):
+        """EuroMillions stars are stored as a JSON array — comparison must handle this."""
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "eu.csv"
+            json_p = Path(tmp) / "eu.json"
+            write_csv(csv_p, EU_FIELDS, [VALID_EU_ROW])
+            entry = {"date": "2025-01-03", "numbers": [3, 19, 29, 35, 37], "stars": [1, 9]}
+            json_p.write_text(json.dumps([entry]), encoding="utf-8")
+            errors = check_json(make_rules(csv_p, "eu", json_path=json_p), csv_rows=[VALID_EU_ROW])
+            self.assertEqual(errors, [])
+
+    def test_eu_stars_mismatch_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_p = Path(tmp) / "eu.csv"
+            json_p = Path(tmp) / "eu.json"
+            write_csv(csv_p, EU_FIELDS, [VALID_EU_ROW])
+            entry = {"date": "2025-01-03", "numbers": [3, 19, 29, 35, 37], "stars": [2, 9]}
+            json_p.write_text(json.dumps([entry]), encoding="utf-8")
+            errors = check_json(make_rules(csv_p, "eu", json_path=json_p), csv_rows=[VALID_EU_ROW])
+            self.assertTrue(any("stars" in e for e in errors))
 
 
 if __name__ == "__main__":

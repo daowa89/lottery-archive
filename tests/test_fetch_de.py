@@ -299,30 +299,72 @@ class TestCsvIO(unittest.TestCase):
 # JSON I/O: write_json
 # ---------------------------------------------------------------------------
 
+from helpers import write_and_load_json
+
+
+class TestLoadExistingDrawsJson(unittest.TestCase):
+    def _draw(self, date="2025-01-04", numbers=(2, 6, 24, 30, 36, 45), superzahl=2):
+        return Draw(date, *numbers, superzahl)
+
+    def test_missing_file_returns_empty(self):
+        from pathlib import Path
+        result = fetch_de.load_existing_draws_json(Path("/nonexistent/results.json"))
+        self.assertEqual(result, [])
+
+    def test_roundtrip(self):
+        import tempfile, pathlib
+        draw = self._draw()
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            original = fetch_de.RESULTS_JSON
+            fetch_de.RESULTS_JSON = json_path
+            try:
+                fetch_de.write_json([draw])
+            finally:
+                fetch_de.RESULTS_JSON = original
+            loaded = fetch_de.load_existing_draws_json(json_path)
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0].date, "2025-01-04")
+        self.assertEqual(loaded[0].n1, 2)
+        self.assertEqual(loaded[0].superzahl, 2)
+
+    def test_none_superzahl_roundtrip(self):
+        import tempfile, pathlib
+        draw = self._draw(date="1970-10-10", superzahl=None)
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            original = fetch_de.RESULTS_JSON
+            fetch_de.RESULTS_JSON = json_path
+            try:
+                fetch_de.write_json([draw])
+            finally:
+                fetch_de.RESULTS_JSON = original
+            loaded = fetch_de.load_existing_draws_json(json_path)
+        self.assertEqual(len(loaded), 1)
+        self.assertIsNone(loaded[0].superzahl)
+
+    def test_malformed_entry_skipped(self):
+        import tempfile, pathlib, json
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            data = [
+                {"date": "2025-01-04", "numbers": [2, 6, 24, 30, 36, 45], "superzahl": 2},
+                {"date": "bad-entry"},
+                {"date": "2025-01-08", "numbers": [9, 27, 28, 30, 45, 49], "superzahl": 6},
+            ]
+            json_path.write_text(json.dumps(data), encoding="utf-8")
+            loaded = fetch_de.load_existing_draws_json(json_path)
+        self.assertEqual(len(loaded), 2)
+        self.assertEqual(loaded[0].date, "2025-01-04")
+        self.assertEqual(loaded[1].date, "2025-01-08")
+
+
 class TestJsonIO(unittest.TestCase):
     def _draw(self, date="2025-01-04", numbers=(2, 6, 24, 30, 36, 45), superzahl=2):
         return Draw(date, *numbers, superzahl)
 
-    def _write_and_load(self, draws):
-        """Write CSV + JSON to a temp dir and return the parsed JSON data."""
-        import tempfile, pathlib, json
-        with tempfile.TemporaryDirectory() as tmp:
-            csv_path = pathlib.Path(tmp) / "results.csv"
-            json_path = pathlib.Path(tmp) / "results.json"
-            orig_csv, orig_json = fetch_de.RESULTS_CSV, fetch_de.RESULTS_JSON
-            fetch_de.RESULTS_CSV = csv_path
-            fetch_de.RESULTS_JSON = json_path
-            try:
-                fetch_de.write_csv(draws)
-                fetch_de.write_json()
-                with open(json_path) as f:
-                    return json.load(f)
-            finally:
-                fetch_de.RESULTS_CSV = orig_csv
-                fetch_de.RESULTS_JSON = orig_json
-
     def test_write_json_structure(self):
-        data = self._write_and_load([self._draw()])
+        data = write_and_load_json(fetch_de, [self._draw()])
         self.assertEqual(len(data), 1)
         entry = data[0]
         self.assertEqual(entry["date"], "2025-01-04")
@@ -331,16 +373,36 @@ class TestJsonIO(unittest.TestCase):
 
     def test_write_json_none_superzahl_serialized_as_null(self):
         """Pre-1992 draws with superzahl=None must appear as null in JSON."""
-        data = self._write_and_load([self._draw(date="1970-10-10", superzahl=None)])
+        data = write_and_load_json(fetch_de, [self._draw(date="1970-10-10", superzahl=None)])
         self.assertIsNone(data[0]["superzahl"])
 
-    def test_write_json_entry_count_matches_csv(self):
+    def test_write_json_entry_count_matches_draws(self):
         draws = [
             self._draw("2025-01-04"),
             self._draw("2025-01-08", numbers=(9, 27, 28, 30, 45, 49), superzahl=6),
         ]
-        data = self._write_and_load(draws)
+        data = write_and_load_json(fetch_de, draws)
         self.assertEqual(len(data), 2)
+
+    def test_write_json_merges_with_existing(self):
+        """Second call must merge with, not overwrite, the existing JSON."""
+        import tempfile, pathlib, json
+        draw1 = self._draw("2025-01-04")
+        draw2 = self._draw("2025-01-08", numbers=(9, 27, 28, 30, 45, 49), superzahl=6)
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = pathlib.Path(tmp) / "results.json"
+            original = fetch_de.RESULTS_JSON
+            fetch_de.RESULTS_JSON = json_path
+            try:
+                fetch_de.write_json([draw1])
+                fetch_de.write_json([draw2])
+                with open(json_path, encoding="utf-8") as f:
+                    data = json.load(f)
+            finally:
+                fetch_de.RESULTS_JSON = original
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["date"], "2025-01-04")
+        self.assertEqual(data[1]["date"], "2025-01-08")
 
 
 if __name__ == "__main__":

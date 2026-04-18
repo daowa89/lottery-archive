@@ -52,7 +52,7 @@ def main() -> int:
         at_new = fetch_at.fetch_new_draws(init=init)
         if at_new:
             fetch_at.write_csv(at_new)
-            fetch_at.write_json()
+            fetch_at.write_json(at_new)
         total += update_country("AT", "Lotto 6 aus 45", str(fetch_at.RESULTS_CSV), str(fetch_at.RESULTS_JSON), at_new)
     except Exception as exc:
         print(f"AT fetch failed: {exc}", file=sys.stderr)
@@ -62,7 +62,7 @@ def main() -> int:
         de_new = fetch_de.fetch_new_draws(init=init)
         if de_new:
             fetch_de.write_csv(de_new)
-            fetch_de.write_json()
+            fetch_de.write_json(de_new)
         total += update_country("DE", "Lotto 6 aus 49", str(fetch_de.RESULTS_CSV), str(fetch_de.RESULTS_JSON), de_new)
     except Exception as exc:
         print(f"DE fetch failed: {exc}", file=sys.stderr)
@@ -72,7 +72,7 @@ def main() -> int:
         eu_new = fetch_eu.fetch_new_draws(init=init)
         if eu_new:
             fetch_eu.write_csv(eu_new)
-            fetch_eu.write_json()
+            fetch_eu.write_json(eu_new)
         total += update_country("EU", "EuroMillions", str(fetch_eu.RESULTS_CSV), str(fetch_eu.RESULTS_JSON), eu_new)
     except Exception as exc:
         print(f"EU fetch failed: {exc}", file=sys.stderr)
