@@ -17,13 +17,13 @@ Usage:
 import csv
 import sys
 import time
-import requests
 from bs4 import BeautifulSoup
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
 from git_utils import git_commit
+from http_utils import fetch_url
 
 RESULTS_CSV = Path(__file__).parent.parent / "de" / "lotto_6aus49" / "results.csv"
 BASE_URL = (
@@ -31,12 +31,6 @@ BASE_URL = (
     "/lottozahlen-archiv.php"
 )
 FIRST_YEAR = 1955   # first German Lotto draw: 1955-10-09
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-}
 
 NUMBER_MIN, NUMBER_MAX = 1, 49
 SUPERZAHL_MIN, SUPERZAHL_MAX = 0, 9
@@ -76,31 +70,6 @@ def validate_draw(draw: Draw) -> tuple[bool, str]:
             f"{SUPERZAHL_MIN}-{SUPERZAHL_MAX}"
         )
     return True, ""
-
-
-# ---------------------------------------------------------------------------
-# Network
-# ---------------------------------------------------------------------------
-
-def fetch_url(url: str, retries: int = 3, backoff: float = 2.0) -> str:
-    """Fetch a URL with retry logic and exponential backoff."""
-    last_exc: Exception | None = None
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    for attempt in range(1, retries + 1):
-        try:
-            resp = session.get(url, timeout=30)
-            resp.raise_for_status()
-            return resp.text
-        except requests.RequestException as exc:
-            last_exc = exc
-            if attempt < retries:
-                wait = backoff ** attempt
-                print(f"  Attempt {attempt} failed ({exc}). Retrying in {wait:.0f}s...")
-                time.sleep(wait)
-
-    raise last_exc  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------

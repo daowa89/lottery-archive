@@ -17,14 +17,13 @@ Usage:
 import csv
 import re
 import sys
-import time
-import requests
 from datetime import date, datetime
 from io import StringIO
 from pathlib import Path
 from typing import NamedTuple
 
 from git_utils import git_commit
+from http_utils import fetch_url, HTTPError, RequestException
 
 RESULTS_CSV = Path(__file__).parent.parent / "at" / "lotto_6aus45" / "results.csv"
 YEARLY_BASE_URL = "https://statics.win2day.at/media/NN_W2D_STAT_Lotto_{year}.csv"
@@ -76,31 +75,6 @@ def validate_draw(draw: Draw) -> tuple[bool, str]:
             f"{ZUSATZZAHL_MIN}-{ZUSATZZAHL_MAX}"
         )
     return True, ""
-
-
-# ---------------------------------------------------------------------------
-# Network
-# ---------------------------------------------------------------------------
-
-def fetch_url(url: str, retries: int = 3, backoff: float = 2.0) -> str:
-    """
-    Download a URL and return the text content.
-    Retries up to `retries` times with exponential backoff on transient errors.
-    """
-    last_exc: Exception | None = None
-    for attempt in range(1, retries + 1):
-        try:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            resp.encoding = resp.apparent_encoding or "windows-1252"
-            return resp.text
-        except requests.RequestException as exc:
-            last_exc = exc
-            if attempt < retries:
-                wait = backoff ** attempt
-                print(f"  Attempt {attempt} failed ({exc}). Retrying in {wait:.0f}s...")
-                time.sleep(wait)
-    raise last_exc  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +256,7 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
             try:
                 content = fetch_url(url)
                 all_draws.extend(parse_historical_file(content))
-            except requests.RequestException as e:
+            except RequestException as e:
                 print(f"  WARNING: Could not fetch {url}: {e}", file=sys.stderr)
         years = range(YEARLY_START, current_year + 1)
     else:
@@ -294,12 +268,12 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
         try:
             content = fetch_url(url)
             all_draws.extend(parse_yearly_file(content, year))
-        except requests.HTTPError as e:
+        except HTTPError as e:
             if e.response.status_code == 404:
                 print(f"  Skipping {year}: file not yet available.")
             else:
                 print(f"  WARNING: HTTP error for {year}: {e}", file=sys.stderr)
-        except requests.RequestException as e:
+        except RequestException as e:
             print(f"  WARNING: Could not fetch {year}: {e}", file=sys.stderr)
 
     seen: set[str] = set()
@@ -340,7 +314,11 @@ def main() -> int:
     mode = "full history" if init else "recent update"
     print(f"Fetching AT Lotto 6 aus 45 ({mode})...")
 
-    new_draws = fetch_new_draws(init=init)
+    try:
+        new_draws = fetch_new_draws(init=init)
+    except Exception as exc:
+        print(f"  Fetch failed: {exc}", file=sys.stderr)
+        return -1
 
     if new_draws:
         print(f"  {len(new_draws)} new draw(s) found:")
@@ -361,8 +339,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        sys.exit(0 if main() >= 0 else 1)
-    except Exception as exc:
-        print(f"Fatal error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    sys.exit(0 if main() >= 0 else 1)

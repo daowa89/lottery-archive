@@ -76,23 +76,28 @@ class TestValidData(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "at.csv"
             write_csv(p, AT_FIELDS, [VALID_AT_ROW, VALID_AT_ROW2])
-            # Use the last draw date as reference so stale check does not fire
-            self.assertEqual(check_csv(make_rules(p, "at"),
-                                       reference_date=date(2025, 1, 8)), [])
+            errors, count = check_csv(make_rules(p, "at"),
+                                      reference_date=date(2025, 1, 8))
+            self.assertEqual(errors, [])
+            self.assertEqual(count, 2)
 
     def test_clean_de_csv_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "de.csv"
             write_csv(p, DE_FIELDS, [VALID_DE_ROW])
-            self.assertEqual(check_csv(make_rules(p, "de"),
-                                       reference_date=date(2021, 1, 2)), [])
+            errors, count = check_csv(make_rules(p, "de"),
+                                      reference_date=date(2021, 1, 2))
+            self.assertEqual(errors, [])
+            self.assertEqual(count, 1)
 
     def test_clean_eu_csv_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "eu.csv"
             write_csv(p, EU_FIELDS, [VALID_EU_ROW, VALID_EU_ROW2])
-            self.assertEqual(check_csv(make_rules(p, "eu"),
-                                       reference_date=date(2025, 1, 7)), [])
+            errors, count = check_csv(make_rules(p, "eu"),
+                                      reference_date=date(2025, 1, 7))
+            self.assertEqual(errors, [])
+            self.assertEqual(count, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +110,7 @@ class TestDuplicateDates(unittest.TestCase):
             p = Path(tmp) / "at.csv"
             row2 = {**VALID_AT_ROW, "n1": 2}  # same date, different numbers
             write_csv(p, AT_FIELDS, [VALID_AT_ROW, row2])
-            errors = check_csv(make_rules(p, "at"))
+            errors, _ = check_csv(make_rules(p, "at"))
             self.assertTrue(any("duplicate" in e for e in errors))
 
 
@@ -118,21 +123,21 @@ class TestNumberRanges(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "at.csv"
             write_csv(p, AT_FIELDS, [{**VALID_AT_ROW, "n6": 46}])
-            errors = check_csv(make_rules(p, "at"))
+            errors, _ = check_csv(make_rules(p, "at"))
             self.assertTrue(any("out of range" in e for e in errors))
 
     def test_de_number_50_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "de.csv"
             write_csv(p, DE_FIELDS, [{**VALID_DE_ROW, "n6": 50}])
-            errors = check_csv(make_rules(p, "de"))
+            errors, _ = check_csv(make_rules(p, "de"))
             self.assertTrue(any("out of range" in e for e in errors))
 
     def test_de_superzahl_10_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "de.csv"
             write_csv(p, DE_FIELDS, [{**VALID_DE_ROW, "superzahl": 10}])
-            errors = check_csv(make_rules(p, "de"))
+            errors, _ = check_csv(make_rules(p, "de"))
             self.assertTrue(any("superzahl" in e for e in errors))
 
     def test_de_empty_superzahl_passes(self):
@@ -140,29 +145,29 @@ class TestNumberRanges(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "de.csv"
             write_csv(p, DE_FIELDS, [{**VALID_DE_ROW, "superzahl": ""}])
-            errors = check_csv(make_rules(p, "de"),
-                               reference_date=date(2021, 1, 2))
+            errors, _ = check_csv(make_rules(p, "de"),
+                                  reference_date=date(2021, 1, 2))
             self.assertEqual(errors, [])
 
     def test_at_zusatzzahl_0_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "at.csv"
             write_csv(p, AT_FIELDS, [{**VALID_AT_ROW, "zusatzzahl": 0}])
-            errors = check_csv(make_rules(p, "at"))
+            errors, _ = check_csv(make_rules(p, "at"))
             self.assertTrue(any("zusatzzahl" in e for e in errors))
 
     def test_eu_main_number_51_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "eu.csv"
             write_csv(p, EU_FIELDS, [{**VALID_EU_ROW, "n5": 51}])
-            errors = check_csv(make_rules(p, "eu"))
+            errors, _ = check_csv(make_rules(p, "eu"))
             self.assertTrue(any("out of range" in e for e in errors))
 
     def test_eu_star_13_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "eu.csv"
             write_csv(p, EU_FIELDS, [{**VALID_EU_ROW, "s2": 13}])
-            errors = check_csv(make_rules(p, "eu"))
+            errors, _ = check_csv(make_rules(p, "eu"))
             self.assertTrue(any("s2" in e for e in errors))
 
     def test_eu_duplicate_stars_reported(self):
@@ -170,7 +175,7 @@ class TestNumberRanges(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "eu.csv"
             write_csv(p, EU_FIELDS, [{**VALID_EU_ROW, "s1": 9, "s2": 9}])
-            errors = check_csv(make_rules(p, "eu"))
+            errors, _ = check_csv(make_rules(p, "eu"))
             self.assertTrue(any("duplicate" in e for e in errors))
 
 
@@ -184,7 +189,7 @@ class TestSortOrder(unittest.TestCase):
             p = Path(tmp) / "at.csv"
             # Write in reverse order (newer date first)
             write_csv(p, AT_FIELDS, [VALID_AT_ROW2, VALID_AT_ROW])
-            errors = check_csv(make_rules(p, "at"))
+            errors, _ = check_csv(make_rules(p, "at"))
             self.assertTrue(any("sorted" in e for e in errors))
 
 
@@ -194,15 +199,17 @@ class TestSortOrder(unittest.TestCase):
 
 class TestEdgeCases(unittest.TestCase):
     def test_missing_file_reported(self):
-        errors = check_csv(make_rules(Path("/nonexistent/path.csv"), "at"))
+        errors, count = check_csv(make_rules(Path("/nonexistent/path.csv"), "at"))
         self.assertTrue(any("not found" in e for e in errors))
+        self.assertEqual(count, 0)
 
     def test_empty_file_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "at.csv"
             write_csv(p, AT_FIELDS, [])
-            errors = check_csv(make_rules(p, "at"))
+            errors, count = check_csv(make_rules(p, "at"))
             self.assertTrue(any("empty" in e for e in errors))
+            self.assertEqual(count, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +224,7 @@ class TestStaleData(unittest.TestCase):
             row = {**VALID_AT_ROW, "date": today.isoformat()}
             write_csv(p, AT_FIELDS, [row])
             rules = make_rules(p, "at")
-            # reference_date = today, last draw = today → 0 days → OK
-            errors = check_csv(rules, reference_date=today)
+            errors, _ = check_csv(rules, reference_date=today)
             self.assertFalse(any("stale" in e for e in errors))
 
     def test_data_within_threshold_passes(self):
@@ -230,7 +236,7 @@ class TestStaleData(unittest.TestCase):
             rules = make_rules(p, "at")
             # 6 days since last draw, threshold is 7 → OK
             reference = last_draw + timedelta(days=6)
-            errors = check_csv(rules, reference_date=reference)
+            errors, _ = check_csv(rules, reference_date=reference)
             self.assertFalse(any("stale" in e for e in errors))
 
     def test_stale_data_reported(self):
@@ -242,7 +248,7 @@ class TestStaleData(unittest.TestCase):
             rules = make_rules(p, "at")
             # 10 days since last draw, threshold is 7 → stale
             reference = last_draw + timedelta(days=10)
-            errors = check_csv(rules, reference_date=reference)
+            errors, _ = check_csv(rules, reference_date=reference)
             self.assertTrue(any("stale" in e for e in errors))
 
     def test_stale_error_mentions_last_date(self):
@@ -253,7 +259,7 @@ class TestStaleData(unittest.TestCase):
             write_csv(p, AT_FIELDS, [row])
             rules = make_rules(p, "at")
             reference = last_draw + timedelta(days=14)
-            errors = check_csv(rules, reference_date=reference)
+            errors, _ = check_csv(rules, reference_date=reference)
             self.assertTrue(any("2025-03-15" in e for e in errors))
 
     def test_skip_stale_suppresses_stale_error(self):
@@ -265,7 +271,7 @@ class TestStaleData(unittest.TestCase):
             write_csv(p, AT_FIELDS, [row])
             rules = make_rules(p, "at")
             reference = last_draw + timedelta(days=30)
-            errors = check_csv(rules, reference_date=reference, skip_stale=True)
+            errors, _ = check_csv(rules, reference_date=reference, skip_stale=True)
             self.assertFalse(any("stale" in e for e in errors))
 
     def test_skip_stale_still_catches_other_errors(self):
@@ -275,7 +281,7 @@ class TestStaleData(unittest.TestCase):
             row2 = {**VALID_AT_ROW, "n1": 2}
             write_csv(p, AT_FIELDS, [VALID_AT_ROW, row2])  # duplicate date
             rules = make_rules(p, "at")
-            errors = check_csv(rules, skip_stale=True)
+            errors, _ = check_csv(rules, skip_stale=True)
             self.assertTrue(any("duplicate" in e for e in errors))
 
 
