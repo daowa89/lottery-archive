@@ -11,19 +11,27 @@ on:
       init:
         description: "Full historical import (1986 to present)"
         required: false
-        default: "false"
+        default: false
         type: boolean
 
 jobs:
   update-at:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
+    permissions: {}
 
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: 3418719
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6

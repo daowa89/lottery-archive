@@ -1,17 +1,20 @@
 # LottoData
 
-[![Unit Tests](https://github.com/daowa89/LottoData/actions/workflows/unit_tests.yml/badge.svg)](https://github.com/daowa89/LottoData/actions/workflows/unit_tests.yml)
-[![Update AT](https://github.com/daowa89/LottoData/actions/workflows/update_at.yml/badge.svg)](https://github.com/daowa89/LottoData/actions/workflows/update_at.yml)
-[![Update DE](https://github.com/daowa89/LottoData/actions/workflows/update_de.yml/badge.svg)](https://github.com/daowa89/LottoData/actions/workflows/update_de.yml)
-[![Update EU](https://github.com/daowa89/LottoData/actions/workflows/update_eu.yml/badge.svg)](https://github.com/daowa89/LottoData/actions/workflows/update_eu.yml)
+[![Unit Tests](https://github.com/daowa89/lottery-archive/actions/workflows/unit_tests.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/unit_tests.yml)
+[![Update AT](https://github.com/daowa89/lottery-archive/actions/workflows/update_at.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/update_at.yml)
+[![Update DE](https://github.com/daowa89/lottery-archive/actions/workflows/update_de.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/update_de.yml)
+[![Update EU](https://github.com/daowa89/lottery-archive/actions/workflows/update_eu.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/update_eu.yml)
+[![Deploy Pages](https://github.com/daowa89/lottery-archive/actions/workflows/deploy_pages.yml/badge.svg)](https://github.com/daowa89/lottery-archive/actions/workflows/deploy_pages.yml)
 
 LottoData is an automated archive of lottery draw results. GitHub Actions fetch new results on every draw day and commit them to this repository as plain CSV files, so the data is always accessible without scraping or signing up for any service.
+
+The latest draw results are published as a **[GitHub Page](https://daowa89.github.io/lottery-archive/)**.
 
 Three lotteries are covered:
 
 - **Austria** — Lotto 6 aus 45 (draws on Wednesday and Sunday, results from 1986)
 - **Germany** — Lotto 6 aus 49 (draws on Wednesday and Saturday, results from 1955)
-- **Europe** — EuroMillions (draws on Tuesday and Friday, results from 2004)
+- **Europe** — Euromillionen (draws on Tuesday and Friday, results from 2004)
 
 ## Data
 
@@ -51,9 +54,24 @@ date,n1,n2,n3,n4,n5,s1,s2
 Fetch the raw CSV directly from GitHub:
 
 ```
-https://raw.githubusercontent.com/daowa89/LottoData/main/at/lotto_6aus45/results.csv
-https://raw.githubusercontent.com/daowa89/LottoData/main/de/lotto_6aus49/results.csv
-https://raw.githubusercontent.com/daowa89/LottoData/main/eu/euromillions/results.csv
+https://raw.githubusercontent.com/daowa89/lottery-archive/main/at/lotto_6aus45/results.csv
+https://raw.githubusercontent.com/daowa89/lottery-archive/main/de/lotto_6aus49/results.csv
+https://raw.githubusercontent.com/daowa89/lottery-archive/main/eu/euromillions/results.csv
+```
+
+Or load directly into a pandas DataFrame:
+
+```python
+import pandas as pd
+
+BASE = "https://raw.githubusercontent.com/daowa89/lottery-archive/main"
+
+at = pd.read_csv(f"{BASE}/at/lotto_6aus45/results.csv", parse_dates=["date"])
+de = pd.read_csv(f"{BASE}/de/lotto_6aus49/results.csv", parse_dates=["date"])
+eu = pd.read_csv(f"{BASE}/eu/euromillions/results.csv", parse_dates=["date"])
+
+# Most recent draw
+print(at.iloc[-1])
 ```
 
 ## Automation
@@ -146,6 +164,20 @@ No additional setup required — the tests use only the Python standard library 
 | [`scripts/update_all.py`](scripts/update_all.py) | Orchestrates all three fetchers for combined local runs |
 | [`scripts/check_integrity.py`](scripts/check_integrity.py) | Validates CSV files for duplicates, number ranges, sort order, and stale data |
 | [`scripts/git_utils.py`](scripts/git_utils.py) | Shared git commit helper used by all update scripts |
+| [`scripts/generate_page.py`](scripts/generate_page.py) | Generates the static `public/index.html` for GitHub Pages |
+
+## GitHub Pages
+
+The latest draw results are available at **[https://daowa89.github.io/lottery-archive/](https://daowa89.github.io/lottery-archive/)**.
+
+The page is generated automatically by [`scripts/generate_page.py`](scripts/generate_page.py) and deployed via the [`deploy_pages.yml`](.github/workflows/deploy_pages.yml) workflow whenever a results CSV is updated on `main`.
+
+To generate the page locally:
+
+```bash
+python scripts/generate_page.py
+# Output: public/index.html
+```
 
 ## License
 
