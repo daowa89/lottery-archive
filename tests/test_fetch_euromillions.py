@@ -306,6 +306,47 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(loaded[0].date, "2025-01-03")
         self.assertEqual(loaded[1].date, "2025-01-07")
 
+    def test_write_draws_overwrites_on_date_collision(self):
+        """Writing a draw for an existing date replaces the old draw."""
+        import tempfile, pathlib
+        original_draw = self._draw(date="2025-01-03", numbers=(1, 2, 3, 4, 5))
+        updated_draw = self._draw(date="2025-01-03", numbers=(3, 19, 29, 35, 37))
+        with tempfile.TemporaryDirectory() as tmp:
+            real_path = pathlib.Path(tmp) / "results.csv"
+            original = fetch_eu.RESULTS_CSV
+            fetch_eu.RESULTS_CSV = real_path
+            try:
+                fetch_eu.write_draws([original_draw])
+                fetch_eu.write_draws([updated_draw])
+                loaded = fetch_eu.load_existing_draws(real_path)
+            finally:
+                fetch_eu.RESULTS_CSV = original
+
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0].n1, 3)
+        self.assertEqual(loaded[0].n2, 19)
+
+
+# ---------------------------------------------------------------------------
+# fetch_new_draws deduplication
+# ---------------------------------------------------------------------------
+
+class TestFetchNewDraws(unittest.TestCase):
+    def test_existing_dates_are_excluded(self):
+        """Draws whose date is already in results.csv must not be returned."""
+        from unittest.mock import patch
+
+        # YEARLY_VALID has draws for 2025-01-03 and 2025-01-07.
+        # fetch_new_draws (init=False) fetches current and previous year.
+        pre_existing = {"2025-01-03"}
+
+        with patch("fetch_euromillions.load_existing_dates",
+                   return_value=set(pre_existing)), \
+             patch("fetch_euromillions.fetch_url", return_value=YEARLY_VALID):
+            draws = fetch_eu.fetch_new_draws(init=False)
+
+        self.assertFalse(any(d.date in pre_existing for d in draws))
+
 
 if __name__ == "__main__":
     unittest.main()

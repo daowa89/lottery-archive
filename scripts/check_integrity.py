@@ -72,7 +72,7 @@ GAMES = [
 
 def check_csv(rules: GameRules,
               reference_date: date | None = None,
-              skip_stale: bool = False) -> list[str]:
+              skip_stale: bool = False) -> tuple[list[str], int]:
     """
     Run all integrity checks on a single CSV file.
 
@@ -84,20 +84,21 @@ def check_csv(rules: GameRules,
                         when no new data was committed (avoids false positives
                         between two draw days).
 
-    Returns a list of error strings (empty list means all checks passed).
+    Returns (errors, row_count). errors is empty when all checks passed.
+    row_count is 0 when the file is missing or empty.
     """
     errors: list[str] = []
     today = reference_date or date.today()
 
     if not rules.csv_path.exists():
-        return [f"File not found: {rules.csv_path}"]
+        return [f"File not found: {rules.csv_path}"], 0
 
     with open(rules.csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
     if not rows:
         errors.append("File is empty (header only).")
-        return errors
+        return errors, 0
 
     dates: list[date] = []
     seen_dates: dict[str, int] = {}
@@ -195,7 +196,7 @@ def check_csv(rules: GameRules,
                 "A draw may have been missed."
             )
 
-    return errors
+    return errors, len(rows)
 
 
 def main() -> int:
@@ -225,7 +226,7 @@ def main() -> int:
 
     for rules in games:
         print(f"Checking {rules.label} ({rules.csv_path.name})...")
-        errors = check_csv(rules, skip_stale=skip_stale)
+        errors, count = check_csv(rules, skip_stale=skip_stale)
 
         if errors:
             all_passed = False
@@ -233,8 +234,6 @@ def main() -> int:
             for err in errors:
                 print(f"    - {err}")
         else:
-            with open(rules.csv_path, newline="", encoding="utf-8") as f:
-                count = sum(1 for _ in csv.DictReader(f))
             print(f"  OK — {count} draw(s), all checks passed.")
 
     return 0 if all_passed else 1

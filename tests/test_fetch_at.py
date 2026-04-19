@@ -194,5 +194,115 @@ class TestParseDateStr(unittest.TestCase):
         self.assertIsNone(fetch_at.parse_date_str("", 2026))
 
 
+# ---------------------------------------------------------------------------
+# CSV I/O
+# ---------------------------------------------------------------------------
+
+class TestCsvIO(unittest.TestCase):
+    def _draw(self, date="2026-01-04", numbers=(1, 4, 15, 16, 22, 38), zusatzzahl=11):
+        return Draw(date, *numbers, zusatzzahl)
+
+    def test_load_existing_draws_missing_file_returns_empty(self):
+        self.assertEqual(fetch_at.load_existing_draws(Path("/nonexistent/path.csv")), [])
+
+    def test_load_existing_dates_missing_file_returns_empty(self):
+        self.assertEqual(fetch_at.load_existing_dates(Path("/nonexistent/path.csv")), set())
+
+    def test_write_and_reload_roundtrip(self):
+        import tempfile, pathlib
+        draw = self._draw()
+        with tempfile.TemporaryDirectory() as tmp:
+            real_path = pathlib.Path(tmp) / "results.csv"
+            original = fetch_at.RESULTS_CSV
+            fetch_at.RESULTS_CSV = real_path
+            try:
+                fetch_at.write_draws([draw])
+                loaded = fetch_at.load_existing_draws(real_path)
+            finally:
+                fetch_at.RESULTS_CSV = original
+
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0].date, "2026-01-04")
+        self.assertEqual(loaded[0].n1, 1)
+        self.assertEqual(loaded[0].zusatzzahl, 11)
+
+    def test_write_draws_merges_with_existing(self):
+        """Writing new draws must not overwrite draws already in the file."""
+        import tempfile, pathlib
+        draw1 = self._draw(date="2026-01-04")
+        draw2 = self._draw(date="2026-01-07", numbers=(4, 5, 16, 21, 35, 45), zusatzzahl=33)
+        with tempfile.TemporaryDirectory() as tmp:
+            real_path = pathlib.Path(tmp) / "results.csv"
+            original = fetch_at.RESULTS_CSV
+            fetch_at.RESULTS_CSV = real_path
+            try:
+                fetch_at.write_draws([draw1])
+                fetch_at.write_draws([draw2])
+                loaded = fetch_at.load_existing_draws(real_path)
+            finally:
+                fetch_at.RESULTS_CSV = original
+
+        self.assertEqual(len(loaded), 2)
+
+    def test_write_draws_sorted_by_date(self):
+        """Draws must be written in chronological order regardless of input order."""
+        import tempfile, pathlib
+        draw_late = self._draw(date="2026-01-07")
+        draw_early = self._draw(date="2026-01-04", numbers=(1, 2, 3, 4, 5, 6))
+        with tempfile.TemporaryDirectory() as tmp:
+            real_path = pathlib.Path(tmp) / "results.csv"
+            original = fetch_at.RESULTS_CSV
+            fetch_at.RESULTS_CSV = real_path
+            try:
+                fetch_at.write_draws([draw_late, draw_early])
+                loaded = fetch_at.load_existing_draws(real_path)
+            finally:
+                fetch_at.RESULTS_CSV = original
+
+        self.assertEqual(loaded[0].date, "2026-01-04")
+        self.assertEqual(loaded[1].date, "2026-01-07")
+
+    def test_write_draws_overwrites_on_date_collision(self):
+        """Writing a draw for an existing date replaces the old draw."""
+        import tempfile, pathlib
+        original_draw = self._draw(date="2026-01-04", numbers=(1, 2, 3, 4, 5, 6))
+        updated_draw = self._draw(date="2026-01-04", numbers=(4, 5, 16, 21, 35, 45))
+        with tempfile.TemporaryDirectory() as tmp:
+            real_path = pathlib.Path(tmp) / "results.csv"
+            original = fetch_at.RESULTS_CSV
+            fetch_at.RESULTS_CSV = real_path
+            try:
+                fetch_at.write_draws([original_draw])
+                fetch_at.write_draws([updated_draw])
+                loaded = fetch_at.load_existing_draws(real_path)
+            finally:
+                fetch_at.RESULTS_CSV = original
+
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0].n1, 4)
+
+
+# ---------------------------------------------------------------------------
+# fetch_new_draws deduplication
+# ---------------------------------------------------------------------------
+
+class TestFetchNewDraws(unittest.TestCase):
+    def test_existing_dates_are_excluded(self):
+        """Draws whose date is already in results.csv must not be returned."""
+        from unittest.mock import patch
+
+        # YEARLY_CSV has draws for 04.01. and 07.01. of the given year.
+        # fetch_new_draws fetches current year and previous year, so with year=2026
+        # we get dates 2025-01-04, 2025-01-07, 2026-01-04, 2026-01-07.
+        existing_dates = {"2026-01-04", "2026-01-07"}
+
+        with patch("fetch_lotto_at_6aus45.load_existing_dates",
+                   return_value=existing_dates), \
+             patch("fetch_lotto_at_6aus45.fetch_url", return_value=YEARLY_CSV):
+            draws = fetch_at.fetch_new_draws(init=False)
+
+        self.assertFalse(any(d.date in existing_dates for d in draws))
+
+
 if __name__ == "__main__":
     unittest.main()

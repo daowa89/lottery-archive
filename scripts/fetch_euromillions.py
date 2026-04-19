@@ -24,12 +24,12 @@ import io
 import re
 import sys
 import time
-import requests
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
 from git_utils import git_commit
+from http_utils import fetch_url, HTTPError, RequestException
 
 RESULTS_CSV = Path(__file__).parent.parent / "eu" / "euromillions" / "results.csv"
 
@@ -44,14 +44,6 @@ FIRST_YEAR = 2004
 
 NUMBER_MIN, NUMBER_MAX = 1, 50
 STAR_MIN, STAR_MAX = 1, 12
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-}
-
 
 class Draw(NamedTuple):
     date: str   # ISO format: YYYY-MM-DD
@@ -88,31 +80,6 @@ def validate_draw(draw: Draw) -> tuple[bool, str]:
         out = [s for s in stars if not STAR_MIN <= s <= STAR_MAX]
         return False, f"star numbers out of range {STAR_MIN}-{STAR_MAX}: {out}"
     return True, ""
-
-
-# ---------------------------------------------------------------------------
-# Network
-# ---------------------------------------------------------------------------
-
-def fetch_url(url: str, retries: int = 3, backoff: float = 2.0) -> str:
-    """Fetch a URL with retry logic and exponential backoff."""
-    last_exc: Exception | None = None
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    for attempt in range(1, retries + 1):
-        try:
-            resp = session.get(url, timeout=30)
-            resp.raise_for_status()
-            return resp.text
-        except requests.RequestException as exc:
-            last_exc = exc
-            if attempt < retries:
-                wait = backoff ** attempt
-                print(f"  Attempt {attempt} failed ({exc}). Retrying in {wait:.0f}s...")
-                time.sleep(wait)
-
-    raise last_exc  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -352,12 +319,15 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
 
     if init:
         print("  Fetching historical data (2004–2016)...")
-        content = fetch_url(HISTORICAL_URL)
-        hist_draws = parse_historical_file(content)
-        new = [d for d in hist_draws if d.date not in existing_dates]
-        all_new.extend(new)
-        existing_dates.update(d.date for d in new)
-        time.sleep(0.5)
+        try:
+            content = fetch_url(HISTORICAL_URL)
+            hist_draws = parse_historical_file(content)
+            new = [d for d in hist_draws if d.date not in existing_dates]
+            all_new.extend(new)
+            existing_dates.update(d.date for d in new)
+            time.sleep(0.5)
+        except RequestException as e:
+            print(f"  WARNING: Could not fetch historical data: {e}", file=sys.stderr)
 
     years = (
         range(FIRST_YEARLY_YEAR, today.year + 1)
@@ -368,7 +338,17 @@ def fetch_new_draws(init: bool = False) -> list[Draw]:
     for year in years:
         print(f"  Fetching year {year}...")
         url = YEARLY_URL.format(year=year)
-        content = fetch_url(url)
+        try:
+            content = fetch_url(url)
+        except HTTPError as e:
+            if e.response.status_code == 404:
+                print(f"  Skipping {year}: file not yet available.")
+            else:
+                print(f"  WARNING: HTTP error for {year}: {e}", file=sys.stderr)
+            continue
+        except RequestException as e:
+            print(f"  WARNING: Could not fetch {year}: {e}", file=sys.stderr)
+            continue
         year_draws = parse_yearly_file(content)
         new = [d for d in year_draws if d.date not in existing_dates]
         all_new.extend(new)

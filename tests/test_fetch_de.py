@@ -222,11 +222,9 @@ class TestCsvIO(unittest.TestCase):
         self.assertEqual(result, set())
 
     def test_write_and_reload_roundtrip(self):
-        import tempfile
+        import tempfile, pathlib
         draw = self._draw()
         with tempfile.TemporaryDirectory() as tmp:
-            csv_path = io.StringIO()  # use a temp file via monkeypatching RESULTS_CSV
-            import pathlib
             real_path = pathlib.Path(tmp) / "results.csv"
             original = fetch_de.RESULTS_CSV
             fetch_de.RESULTS_CSV = real_path
@@ -293,6 +291,48 @@ class TestCsvIO(unittest.TestCase):
 
         self.assertEqual(loaded[0].date, "2025-01-04")
         self.assertEqual(loaded[1].date, "2025-01-08")
+
+    def test_write_draws_overwrites_on_date_collision(self):
+        """Writing a draw for an existing date replaces the old draw."""
+        import tempfile, pathlib
+        original_draw = self._draw(date="2025-01-04", numbers=(1, 2, 3, 4, 5, 6))
+        updated_draw = self._draw(date="2025-01-04", numbers=(9, 27, 28, 30, 45, 49))
+        with tempfile.TemporaryDirectory() as tmp:
+            real_path = pathlib.Path(tmp) / "results.csv"
+            original = fetch_de.RESULTS_CSV
+            fetch_de.RESULTS_CSV = real_path
+            try:
+                fetch_de.write_draws([original_draw])
+                fetch_de.write_draws([updated_draw])
+                loaded = fetch_de.load_existing_draws(real_path)
+            finally:
+                fetch_de.RESULTS_CSV = original
+
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0].n1, 9)
+
+
+# ---------------------------------------------------------------------------
+# fetch_new_draws deduplication
+# ---------------------------------------------------------------------------
+
+class TestFetchNewDraws(unittest.TestCase):
+    def test_existing_dates_are_excluded(self):
+        """Draws whose date is already in results.csv must not be returned."""
+        from unittest.mock import patch
+
+        # PAGE_THREE_DRAWS has dates 2025-01-04, 2025-01-08, 2025-01-11
+        pre_existing = {"2025-01-04", "2025-01-08"}
+
+        with patch("fetch_lotto_de_6aus49.load_existing_dates",
+                   return_value=set(pre_existing)), \
+             patch("fetch_lotto_de_6aus49.fetch_url",
+                   return_value=PAGE_THREE_DRAWS):
+            draws = fetch_de.fetch_new_draws(init=False)
+
+        self.assertFalse(any(d.date in pre_existing for d in draws))
+        self.assertEqual(len(draws), 1)
+        self.assertEqual(draws[0].date, "2025-01-11")
 
 
 if __name__ == "__main__":
