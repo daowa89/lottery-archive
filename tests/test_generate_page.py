@@ -57,6 +57,59 @@ class TestReadLastRow(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# read_all_rows
+# ---------------------------------------------------------------------------
+
+class TestReadAllRows(unittest.TestCase):
+
+    def _csv(self, rows):
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        )
+        fieldnames = list(rows[0].keys())
+        writer = csv.DictWriter(tmp, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+        tmp.flush()
+        return Path(tmp.name)
+
+    def test_returns_all_rows_sorted_newest_first(self):
+        path = self._csv([
+            {"date": "2024-01-01", "n1": "1"},
+            {"date": "2024-06-15", "n1": "7"},
+            {"date": "2025-03-22", "n1": "42"},
+        ])
+        rows = gp.read_all_rows(path)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["date"], "2025-03-22")
+        self.assertEqual(rows[1]["date"], "2024-06-15")
+        self.assertEqual(rows[2]["date"], "2024-01-01")
+
+    def test_single_row(self):
+        path = self._csv([{"date": "2020-05-10", "n1": "3"}])
+        rows = gp.read_all_rows(path)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["date"], "2020-05-10")
+
+    def test_empty_csv_returns_empty_list(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        ) as f:
+            f.write("date,n1\n")
+        rows = gp.read_all_rows(Path(f.name))
+        self.assertEqual(rows, [])
+
+    def test_already_sorted_input_still_correct(self):
+        path = self._csv([
+            {"date": "2025-12-31", "n1": "10"},
+            {"date": "2025-01-01", "n1": "20"},
+        ])
+        rows = gp.read_all_rows(path)
+        self.assertEqual(rows[0]["date"], "2025-12-31")
+        self.assertEqual(rows[1]["date"], "2025-01-01")
+
+
+# ---------------------------------------------------------------------------
 # format_date
 # ---------------------------------------------------------------------------
 
@@ -143,6 +196,87 @@ class TestRenderLotteryCard(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# render_lottery_section
+# ---------------------------------------------------------------------------
+
+class TestRenderLotterySection(unittest.TestCase):
+
+    AT = {
+        "id": "at",
+        "name": "Lotto 6 aus 45",
+        "flag": "🇦🇹",
+        "numbers": ["n1", "n2", "n3", "n4", "n5", "n6"],
+        "bonus": [("Zusatzzahl", "zusatzzahl")],
+        "bonus_style": "bonus-red",
+    }
+
+    EU = {
+        "id": "eu",
+        "name": "Euromillionen",
+        "flag": "🇪🇺",
+        "numbers": ["n1", "n2", "n3", "n4", "n5"],
+        "bonus": [("Lucky Star", "s1"), ("Lucky Star", "s2")],
+        "bonus_style": "bonus-eu",
+    }
+
+    def _rows_at(self):
+        return [
+            {"date": "2025-03-22", "n1": "1", "n2": "2", "n3": "3",
+             "n4": "4", "n5": "5", "n6": "6", "zusatzzahl": "7"},
+            {"date": "2025-03-15", "n1": "8", "n2": "9", "n3": "10",
+             "n4": "11", "n5": "12", "n6": "13", "zusatzzahl": "2"},
+        ]
+
+    def test_returns_empty_for_no_rows(self):
+        html = gp.render_lottery_section(self.AT, [])
+        self.assertEqual(html, "")
+
+    def test_contains_lottery_name(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at())
+        self.assertIn("Lotto 6 aus 45", html)
+
+    def test_contains_section_id(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at())
+        self.assertIn('id="at"', html)
+
+    def test_contains_draws_table(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at())
+        self.assertIn("draws-table", html)
+
+    def test_rows_appear_in_order_newest_first(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at())
+        pos_newer = html.find("22.03.2025")
+        pos_older = html.find("15.03.2025")
+        self.assertLess(pos_newer, pos_older)
+
+    def test_all_main_numbers_rendered(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at()[:1])
+        for num in ["1", "2", "3", "4", "5", "6"]:
+            self.assertIn(f">{num}<", html)
+
+    def test_bonus_number_rendered(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at()[:1])
+        self.assertIn("bonus-red", html)
+
+    def test_two_lucky_stars_per_row(self):
+        rows = [{"date": "2025-01-01", "n1": "1", "n2": "2", "n3": "3",
+                 "n4": "4", "n5": "5", "s1": "3", "s2": "11"}]
+        html = gp.render_lottery_section(self.EU, rows)
+        self.assertEqual(html.count("bonus-eu"), 2)
+
+    def test_empty_bonus_shows_dash(self):
+        rows = [{"date": "2025-01-01", "n1": "1", "n2": "2", "n3": "3",
+                 "n4": "4", "n5": "5", "n6": "6", "zusatzzahl": ""}]
+        html = gp.render_lottery_section(self.AT, rows)
+        self.assertNotIn("bonus-red", html)
+        self.assertIn("–", html)
+
+    def test_table_header_has_datum_column(self):
+        html = gp.render_lottery_section(self.AT, self._rows_at())
+        self.assertIn("<th>Datum</th>", html)
+
+
+# ---------------------------------------------------------------------------
 # generate_html
 # ---------------------------------------------------------------------------
 
@@ -179,22 +313,22 @@ class TestMain(unittest.TestCase):
 
     def test_generates_index_html(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Patch REPO_ROOT so output goes to a temp dir
             original_root = gp.REPO_ROOT
             try:
-                gp.REPO_ROOT = Path(original_root)  # keep real CSVs
+                gp.REPO_ROOT = Path(original_root)
+
                 captured = {}
 
                 def patched_main():
-                    cards = []
+                    sections = []
                     for lottery in gp.LOTTERIES:
-                        row = gp.read_last_row(lottery["csv"])
-                        if row is None:
+                        rows = gp.read_all_rows(lottery["csv"])
+                        if not rows:
                             continue
-                        cards.append(gp.render_lottery_card(lottery, row))
+                        sections.append(gp.render_lottery_section(lottery, rows))
                     from datetime import UTC, datetime
                     ts = datetime.now(UTC).strftime("%d.%m.%Y %H:%M UTC")
-                    html = gp.generate_html(cards, ts)
+                    html = gp.generate_html(sections, ts)
                     out = Path(tmpdir) / "index.html"
                     out.write_text(html, encoding="utf-8")
                     captured["html"] = html

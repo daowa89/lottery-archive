@@ -1,4 +1,4 @@
-"""Generate a static index.html showing the latest lottery draw results."""
+"""Generate a static index.html showing all lottery draw results sorted newest first."""
 
 import csv
 from datetime import UTC, datetime
@@ -46,6 +46,12 @@ def read_last_row(csv_path: Path) -> dict:
     return last
 
 
+def read_all_rows(csv_path: Path) -> list[dict]:
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return sorted(rows, key=lambda r: r["date"], reverse=True)
+
+
 def format_date(iso_date: str) -> str:
     d = datetime.strptime(iso_date, "%Y-%m-%d").date()
     return d.strftime("%d.%m.%Y")
@@ -81,14 +87,55 @@ def render_lottery_card(lottery: dict, row: dict) -> str:
     </article>"""
 
 
-def generate_html(cards: list[str], generated_at: str) -> str:
-    cards_html = "\n".join(cards)
+def render_lottery_section(lottery: dict, rows: list[dict]) -> str:
+    if not rows:
+        return ""
+
+    num_th = "".join(f"<th>N{i + 1}</th>" for i in range(len(lottery["numbers"])))
+    bonus_th = "".join(f"<th>{label}</th>" for label, _ in lottery["bonus"])
+
+    tbody_rows = []
+    for row in rows:
+        tds = f'<td class="td-date">{format_date(row["date"])}</td>'
+        tds += "".join(
+            f'<td><span class="ball main">{row[col]}</span></td>'
+            for col in lottery["numbers"]
+        )
+        for label, col in lottery["bonus"]:
+            val = row.get(col, "").strip()
+            if val:
+                tds += f'<td><span class="ball {lottery["bonus_style"]}" title="{label}">{val}</span></td>'
+            else:
+                tds += "<td>–</td>"
+        tbody_rows.append(f"<tr>{tds}</tr>")
+
+    tbody_html = "\n".join(tbody_rows)
+
+    return f"""
+    <section class="lottery-section" id="{lottery['id']}">
+      <h2 class="lottery-title">
+        <span class="flag">{lottery['flag']}</span>
+        {lottery['name']}
+      </h2>
+      <div class="table-wrapper">
+        <table class="draws-table">
+          <thead><tr><th>Datum</th>{num_th}{bonus_th}</tr></thead>
+          <tbody>
+            {tbody_html}
+          </tbody>
+        </table>
+      </div>
+    </section>"""
+
+
+def generate_html(sections: list[str], generated_at: str) -> str:
+    sections_html = "\n".join(sections)
     return f"""<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lottery Archive – Letzte Ziehungen</title>
+  <title>Lottery Archive – Ziehungsergebnisse</title>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
@@ -118,57 +165,85 @@ def generate_html(cards: list[str], generated_at: str) -> str:
       font-size: 0.9rem;
     }}
 
-    .grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
+    .sections {{
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
       max-width: 1100px;
       margin: 0 auto;
     }}
 
-    .card {{
+    .lottery-section {{
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 1rem;
       padding: 1.5rem;
     }}
 
-    .card header {{
+    .lottery-title {{
       display: flex;
       align-items: center;
       gap: 0.6rem;
-      margin-bottom: 0.75rem;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 1.25rem;
     }}
 
     .flag {{ font-size: 1.6rem; line-height: 1; }}
 
-    .card h2 {{
-      font-size: 1.1rem;
+    .table-wrapper {{
+      max-height: 400px;
+      overflow-y: auto;
+      border-radius: 0.5rem;
+    }}
+
+    .draws-table {{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }}
+
+    .draws-table thead th {{
+      position: sticky;
+      top: 0;
+      background: #0f172a;
+      color: #94a3b8;
       font-weight: 600;
-      color: #f1f5f9;
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #334155;
+      white-space: nowrap;
     }}
 
-    .draw-date {{
+    .draws-table tbody tr {{
+      border-bottom: 1px solid #263348;
+    }}
+
+    .draws-table tbody tr:hover {{
+      background: #263348;
+    }}
+
+    .draws-table td {{
+      padding: 0.4rem 0.75rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }}
+
+    .td-date {{
+      color: #94a3b8;
       font-size: 0.82rem;
-      color: #64748b;
-      margin-bottom: 1.1rem;
-    }}
-
-    .balls {{
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
+      min-width: 6rem;
     }}
 
     .ball {{
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 2.6rem;
-      height: 2.6rem;
+      width: 2.2rem;
+      height: 2.2rem;
       border-radius: 50%;
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       font-weight: 700;
     }}
 
@@ -187,12 +262,6 @@ def generate_html(cards: list[str], generated_at: str) -> str:
       color: #1e293b;
     }}
 
-    .separator {{
-      color: #475569;
-      font-weight: 700;
-      font-size: 1.2rem;
-    }}
-
     footer {{
       text-align: center;
       margin-top: 3rem;
@@ -209,11 +278,11 @@ def generate_html(cards: list[str], generated_at: str) -> str:
 <body>
   <header class="page-header">
     <h1>Lottery Archive</h1>
-    <p>Letzte offizielle Ziehungsergebnisse</p>
+    <p>Offizielle Ziehungsergebnisse – neueste zuerst</p>
   </header>
 
-  <main class="grid">
-    {cards_html}
+  <main class="sections">
+    {sections_html}
   </main>
 
   <footer>
@@ -227,16 +296,16 @@ def generate_html(cards: list[str], generated_at: str) -> str:
 
 
 def main():
-    cards = []
+    sections = []
     for lottery in LOTTERIES:
-        row = read_last_row(lottery["csv"])
-        if row is None:
+        rows = read_all_rows(lottery["csv"])
+        if not rows:
             print(f"WARNING: No data found in {lottery['csv']}")
             continue
-        cards.append(render_lottery_card(lottery, row))
+        sections.append(render_lottery_section(lottery, rows))
 
     generated_at = datetime.now(UTC).strftime("%d.%m.%Y %H:%M UTC")
-    html = generate_html(cards, generated_at)
+    html = generate_html(sections, generated_at)
 
     out_dir = REPO_ROOT / "public"
     out_dir.mkdir(exist_ok=True)
