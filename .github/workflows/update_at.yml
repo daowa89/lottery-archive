@@ -4,7 +4,7 @@ on:
   schedule:
     # Austria draws on Wednesday and Sunday at ~19:00 CET (18:00 UTC summer / 17:00 UTC winter).
     # Running at 20:00 UTC ensures results are published before we fetch.
-    - cron: "0 20 * * 0,3"   # Sunday (0) and Wednesday (3)
+    - cron: "0 20 * * 0,3,5"   # Sunday (0), Wednesday (3), and Friday (5)
 
   workflow_dispatch:
     inputs:
