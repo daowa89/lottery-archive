@@ -12,7 +12,7 @@ The latest draw results are published as a **[GitHub Page](https://daowa89.githu
 
 Three lotteries are covered:
 
-- **Austria** — Lotto 6 aus 45 (draws on Wednesday and Sunday, results from 1986)
+- **Austria** — Lotto 6 aus 45 (draws on Wednesday, Friday and Sunday, results from 1986)
 - **Germany** — Lotto 6 aus 49 (draws on Wednesday and Saturday, results from 1955)
 - **Europe** — Euromillionen (draws on Tuesday and Friday, results from 2004)
 
@@ -80,7 +80,7 @@ Three separate [GitHub Actions workflows](.github/workflows/) run automatically 
 
 | Workflow | Draw days | Time (UTC) | Time (CET / CEST) |
 |----------|-----------|------------|-------------------|
-| [`update_at.yml`](.github/workflows/update_at.yml) | Wednesday + Sunday | 20:00 | 21:00 / 22:00 |
+| [`update_at.yml`](.github/workflows/update_at.yml) | Wednesday + Friday + Sunday | 20:00 | 21:00 / 22:00 |
 | [`update_de.yml`](.github/workflows/update_de.yml) | Wednesday + Saturday | 20:00 | 21:00 / 22:00 |
 | [`update_eu.yml`](.github/workflows/update_eu.yml) | Tuesday + Friday | 22:00 | 23:00 / 00:00 |
 
