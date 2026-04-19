@@ -12,7 +12,7 @@ The latest draw results are published as a **[GitHub Page](https://daowa89.githu
 
 Three lotteries are covered:
 
-- **Austria** — Lotto 6 aus 45 (draws on Wednesday and Sunday, results from 1986)
+- **Austria** — Lotto 6 aus 45 (regular draws on Wednesday and Sunday, occasional extra draws on Friday, results from 1986)
 - **Germany** — Lotto 6 aus 49 (draws on Wednesday and Saturday, results from 1955)
 - **Europe** — Euromillionen (draws on Tuesday and Friday, results from 2004)
 
