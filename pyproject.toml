@@ -5,7 +5,7 @@ description = "Automated lottery draw result collector for Austria (6 aus 45) an
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
-    "requests==2.33.1",
+    "requests==2.34.0",
     "beautifulsoup4==4.14.3",
     "lxml==6.0.4",
 ]
