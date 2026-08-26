@@ -7,7 +7,7 @@ license = "MIT"
 dependencies = [
     "requests==2.34.2",
     "beautifulsoup4==4.14.3",
-    "lxml==6.1.1",
+    "lxml==6.1.2",
 ]
 
 [tool.setuptools]
